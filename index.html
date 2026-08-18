@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Negociador Implacable — simulador de negociación para directivos</title>
+<meta name="description" content="Entrena habilidades de negociación comercial, de compras y de gestión de proyectos contra un avatar que negocia en serio: con límites confidenciales, tácticas y un informe de evaluación al final.">
+<meta property="og:title" content="Negociador Implacable">
+<meta property="og:description" content="Simulador de negociación para directivos. Elige el caso, el papel del avatar y la dureza. Negocia. Recibe tu evaluación.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="assets/estilos.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23e0a458'/></svg>">
+</head>
+<body>
+
+<header class="principal">
+  <div class="contenedor">
+    <div class="marca" data-ir="inicio"><span class="punto"></span> Negociador Implacable</div>
+    <nav class="principal">
+      <button data-ir="inicio">Inicio</button>
+      <button data-ir="casos">Casos</button>
+      <button data-ir="preparacion">Preparación</button>
+      <button data-ir="marco">El marco</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ══════════ INICIO ══════════ -->
+<section id="vista-inicio" class="vista activa">
+  <div class="contenedor">
+    <div class="hero">
+      <span class="etiqueta">Simulador de negociación</span>
+      <h1>Negocia contra alguien que<br><span class="destacado">no te lo va a poner fácil</span>.</h1>
+      <p class="entrada">
+        Un avatar que interpreta a la otra parte en serio: con sus propios objetivos, sus límites
+        confidenciales, su alternativa si no hay acuerdo y un repertorio de treinta tácticas que
+        usará contigo sin avisar. Cuando cerréis —o rompáis— te dirá exactamente dónde ganaste
+        y dónde dejaste valor sobre la mesa.
+      </p>
+      <div class="barra-accion">
+        <button class="boton" data-ir="casos">Elegir un caso</button>
+        <button class="boton secundario" data-ir="marco">Ver el marco de trabajo</button>
+      </div>
+    </div>
+
+    <div class="pasos">
+      <div class="paso">
+        <div class="num">1</div>
+        <h3>Elige el caso y tu papel</h3>
+        <p>Negociación con cliente, con proveedor o interna. Tú eliges qué lado de la mesa ocupas.</p>
+      </div>
+      <div class="paso">
+        <div class="num">2</div>
+        <h3>Configura al avatar</h3>
+        <p>Contraparte, evaluador o coach. Cinco niveles de dureza y cuatro perfiles conductuales.</p>
+      </div>
+      <div class="paso">
+        <div class="num">3</div>
+        <h3>Prepara</h3>
+        <p>Tu briefing confidencial y una hoja para fijar objetivos, MAAN, variables y preguntas.</p>
+      </div>
+      <div class="paso">
+        <div class="num">4</div>
+        <h3>Negocia y recibe el informe</h3>
+        <p>Puntuación sobre ocho dimensiones, con citas de lo que dijiste, y un plan de acción.</p>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h3>Por qué un avatar y no un compañero de curso</h3>
+      <p class="ayuda" style="margin-bottom:0">
+        Porque el avatar no se corta, no te conoce, no te va a dejar ganar por cortesía y no se cansa
+        de repetir el mismo caso hasta que te salga bien. Y porque recuerda todo lo que dijiste:
+        el informe final cita tus frases exactas, no impresiones.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ CASOS ══════════ -->
+<section id="vista-casos" class="vista">
+  <div class="contenedor">
+    <h2>Biblioteca de casos</h2>
+    <p class="ayuda" style="color:var(--tenue);max-width:62ch">
+      Cada caso tiene dos papeles con objetivos incompatibles y límites confidenciales.
+      Tú ves solo tu mitad; el avatar juega la otra.
+    </p>
+    <div class="filtros" id="filtros"></div>
+    <div class="rejilla" id="lista-casos"></div>
+  </div>
+</section>
+
+<!-- ══════════ CONFIGURAR ══════════ -->
+<section id="vista-configurar" class="vista">
+  <div class="contenedor">
+    <button class="boton fantasma" data-ir="casos" style="margin-bottom:20px">← Volver a los casos</button>
+    <h2 id="config-titulo">Configura la simulación</h2>
+    <p class="ayuda" style="color:var(--tenue)" id="config-sub"></p>
+
+    <div class="bloque">
+      <h3>Tu papel <small>eliges un lado; el avatar juega el otro</small></h3>
+      <div class="opciones" id="opciones-rol"></div>
+    </div>
+
+    <div class="bloque">
+      <h3>Qué quieres que sea el avatar</h3>
+      <div class="opciones" id="opciones-modo">
+        <button class="opcion" data-campo="modo" data-valor="contraparte">
+          <strong>Solo contraparte</strong><span>Negocia y nada más. Máximo realismo, sin evaluación.</span>
+        </button>
+        <button class="opcion" data-campo="modo" data-valor="evaluador" aria-pressed="true">
+          <strong>Contraparte y evaluador</strong><span>Negocia y, al cerrar, te entrega el informe completo.</span>
+        </button>
+        <button class="opcion" data-campo="modo" data-valor="coach">
+          <strong>Contraparte y coach</strong><span>Puedes pedir tiempo muerto y recibir una pista sin salir del caso.</span>
+        </button>
+        <button class="opcion" data-campo="modo" data-valor="preparacion">
+          <strong>Entrenador de preparación</strong><span>Todavía no negociáis: te ayuda a preparar la reunión.</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h3>Dureza</h3>
+      <p class="ayuda">Si es tu primera vez, empieza en 3. El nivel 5 no perdona nada.</p>
+      <div class="opciones" id="opciones-dureza">
+        <button class="opcion" data-campo="dureza" data-valor="1"><strong>1 · Colaborativo</strong><span>Comparte información y casi no usa tácticas.</span></button>
+        <button class="opcion" data-campo="dureza" data-valor="2"><strong>2 · Firme</strong><span>Defiende sus posiciones. Alguna táctica suave.</span></button>
+        <button class="opcion" data-campo="dureza" data-valor="3" aria-pressed="true"><strong>3 · Duro</strong><span>Ancla alto y no concede nada sin contrapartida.</span></button>
+        <button class="opcion" data-campo="dureza" data-valor="4"><strong>4 · Implacable</strong><span>Presiona con plazos y alternativas. Castiga la falta de preparación.</span></button>
+        <button class="opcion" data-campo="dureza" data-valor="5"><strong>5 · Hostil</strong><span>Ultimátums, agresividad y amenaza real de romper.</span></button>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h3>Perfil conductual del avatar</h3>
+      <p class="ayuda">Cada perfil exige una forma distinta de tratarlo. «Oculto» es el mejor ejercicio: deberás identificarlo tú.</p>
+      <div class="opciones" id="opciones-color">
+        <button class="opcion color-rojo" data-campo="color" data-valor="rojo"><strong>Rojo · impulsor</strong><span>Directo, impaciente, orientado al resultado.</span></button>
+        <button class="opcion color-amarillo" data-campo="color" data-valor="amarillo"><strong>Amarillo · expresivo</strong><span>Locuaz, relacional, se va por las ramas.</span></button>
+        <button class="opcion color-verde" data-campo="color" data-valor="verde"><strong>Verde · conciliador</strong><span>Pausado, evita el conflicto, decide despacio.</span></button>
+        <button class="opcion color-azul" data-campo="color" data-valor="azul"><strong>Azul · analítico</strong><span>Preciso, pide datos, cuestiona cada cifra.</span></button>
+        <button class="opcion" data-campo="color" data-valor="oculto" aria-pressed="true"><strong>Oculto</strong><span>Juega uno sin decirte cuál. Tendrás que deducirlo.</span></button>
+      </div>
+    </div>
+
+    <div class="barra-accion">
+      <button class="boton" id="btn-empezar" disabled>Ver mi briefing</button>
+      <span class="nota" id="nota-config">Elige primero tu papel.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ BRIEFING ══════════ -->
+<section id="vista-briefing" class="vista">
+  <div class="contenedor">
+    <button class="boton fantasma" data-ir="configurar" style="margin-bottom:20px">← Cambiar la configuración</button>
+    <h2>Tu briefing confidencial</h2>
+    <p class="ayuda" style="color:var(--tenue);max-width:64ch">
+      Esto es lo que sabes tú. El avatar tiene su propia ficha, con sus objetivos y sus límites,
+      y no la vas a ver hasta el informe final. Prepárate antes de entrar: según el marco del curso,
+      el resultado de una negociación se decide en buena medida antes de sentarse.
+    </p>
+
+    <div class="dos-columnas">
+      <div class="bloque">
+        <h3>El caso</h3>
+        <div class="prosa" id="briefing-contexto"></div>
+      </div>
+      <div class="bloque">
+        <h3 id="briefing-rol-titulo">Tu papel</h3>
+        <div class="prosa" id="briefing-rol"></div>
+      </div>
+    </div>
+
+    <div class="barra-accion" style="margin-top:20px">
+      <button class="boton" id="btn-a-la-sala">Entrar en la sala</button>
+      <button class="boton secundario" data-ir="preparacion">Rellenar la hoja de preparación</button>
+      <button class="boton fantasma" id="btn-imprimir-briefing">Imprimir</button>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ SALA ══════════ -->
+<section id="vista-sala" class="vista">
+  <div class="contenedor">
+    <div class="sala">
+      <aside class="panel-lateral">
+        <div class="bloque">
+          <h3>La mesa</h3>
+          <div class="dato"><span>Caso</span><span id="sala-caso">—</span></div>
+          <div class="dato"><span>Tú</span><span id="sala-yo">—</span></div>
+          <div class="dato"><span>Avatar</span><span id="sala-avatar">—</span></div>
+          <div class="dato"><span>Dureza</span><span id="sala-dureza">—</span></div>
+          <div class="dato"><span>Perfil</span><span id="sala-color">—</span></div>
+          <div class="dato"><span>Intervenciones</span><span id="sala-turnos">0</span></div>
+        </div>
+        <div class="bloque">
+          <h3>Tus objetivos</h3>
+          <div class="prosa" id="sala-recordatorio" style="font-size:.85rem"></div>
+        </div>
+        <button class="boton fantasma" id="btn-salir" style="width:100%">Salir de la sala</button>
+      </aside>
+
+      <div>
+        <div class="conversacion" id="conversacion"></div>
+        <div class="compositor">
+          <div class="fila">
+            <textarea id="entrada" placeholder="Escribe tu intervención… (Enter para enviar, Mayús+Enter para salto de línea)" rows="2"></textarea>
+            <button class="boton" id="btn-enviar">Enviar</button>
+          </div>
+          <div class="acciones-sala">
+            <button class="boton fantasma" data-atajo="receso">Pedir un receso</button>
+            <button class="boton fantasma" data-atajo="tiempo muerto" id="btn-tiempo-muerto">Tiempo muerto</button>
+            <button class="boton peligro" data-atajo="FIN DE LA SIMULACIÓN">Fin de la simulación</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ PREPARACIÓN ══════════ -->
+<section id="vista-preparacion" class="vista">
+  <div class="contenedor">
+    <h2>Hoja de preparación</h2>
+    <p class="ayuda" style="color:var(--tenue);max-width:64ch">
+      Se guarda sola en tu navegador. Nada de esto sale de tu ordenador.
+      <span class="guardado" id="aviso-guardado">Guardado</span>
+    </p>
+
+    <div class="bloque">
+      <h3>1 · Mis objetivos por variable <small>óptimo, satisfactorio, mínimo</small></h3>
+      <p class="ayuda">Sin un mínimo escrito, la contraparte lo encontrará por ti.</p>
+      <table class="editable">
+        <thead><tr><th style="width:26%">Variable</th><th>Óptimo</th><th>Satisfactorio</th><th>Mínimo</th></tr></thead>
+        <tbody id="tabla-objetivos"></tbody>
+      </table>
+    </div>
+
+    <div class="bloque">
+      <h3>2 · Coste e importancia <small>el mapa del toma y daca</small></h3>
+      <p class="ayuda">Busca lo que a ti te cuesta poco y a ellos les importa mucho. Esa es tu moneda.</p>
+      <table class="editable">
+        <thead><tr><th style="width:22%">Variable</th><th>Me cuesta (1-5)</th><th>Me importa (1-5)</th><th>Les cuesta (1-5)</th><th>Les importa (1-5)</th></tr></thead>
+        <tbody id="tabla-variables"></tbody>
+      </table>
+    </div>
+
+    <div class="dos-columnas">
+      <div class="bloque">
+        <h3>3 · MAAN</h3>
+        <div class="campo">
+          <label for="p-maan-mio">Mi mejor alternativa si no hay acuerdo<span class="pista">¿Qué hago si me levanto? ¿Cuánto vale?</span></label>
+          <textarea id="p-maan-mio" data-prep rows="3"></textarea>
+        </div>
+        <div class="campo">
+          <label for="p-maan-suyo">Su alternativa probable<span class="pista">¿Cómo lo voy a averiguar?</span></label>
+          <textarea id="p-maan-suyo" data-prep rows="3"></textarea>
+        </div>
+      </div>
+      <div class="bloque">
+        <h3>4 · Posición, intereses, necesidad</h3>
+        <div class="campo">
+          <label for="p-posicion">Lo que dirán que quieren</label>
+          <textarea id="p-posicion" data-prep rows="2"></textarea>
+        </div>
+        <div class="campo">
+          <label for="p-intereses">Lo que probablemente les mueve</label>
+          <textarea id="p-intereses" data-prep rows="2"></textarea>
+        </div>
+        <div class="campo">
+          <label for="p-necesidad">Lo que de verdad necesitan</label>
+          <textarea id="p-necesidad" data-prep rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h3>5 · Mis preguntas <small>por escrito, como manda el marco</small></h3>
+      <div class="dos-columnas">
+        <div>
+          <div class="campo"><label for="p-preg-averiguar">Para averiguar <span class="pista">¿qué? ¿cómo? ¿por qué?</span></label><textarea id="p-preg-averiguar" data-prep rows="2"></textarea></div>
+          <div class="campo"><label for="p-preg-comprender">Para comprender <span class="pista">¿a qué te refieres?</span></label><textarea id="p-preg-comprender" data-prep rows="2"></textarea></div>
+        </div>
+        <div>
+          <div class="campo"><label for="p-preg-construir">Para construir <span class="pista">¿qué propones?</span></label><textarea id="p-preg-construir" data-prep rows="2"></textarea></div>
+          <div class="campo"><label for="p-preg-concretar">Para concretar <span class="pista">¿cuánto? ¿para cuándo?</span></label><textarea id="p-preg-concretar" data-prep rows="2"></textarea></div>
+        </div>
+      </div>
+      <div class="campo"><label for="p-preg-dificil">La pregunta más difícil que me pueden hacer, y mi respuesta</label><textarea id="p-preg-dificil" data-prep rows="2"></textarea></div>
+    </div>
+
+    <div class="bloque">
+      <h3>6 · Mi apertura <small>y los tres primeros movimientos</small></h3>
+      <p class="ayuda">Comprueba antes de entrar: ¿son decrecientes?</p>
+      <div class="campo"><label for="p-apertura">Oferta inicial</label><input type="text" id="p-apertura" data-prep></div>
+      <div class="dos-columnas">
+        <div class="campo"><label for="p-mov2">Movimiento 2</label><input type="text" id="p-mov2" data-prep></div>
+        <div class="campo"><label for="p-mov3">Movimiento 3</label><input type="text" id="p-mov3" data-prep></div>
+      </div>
+      <div class="campo"><label for="p-tacticas">Tácticas que espero y mi respuesta</label><textarea id="p-tacticas" data-prep rows="2"></textarea></div>
+    </div>
+
+    <div class="barra-accion">
+      <button class="boton secundario" id="btn-descargar-prep">Descargar mi hoja</button>
+      <button class="boton fantasma" id="btn-borrar-prep">Borrar y empezar de cero</button>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ MARCO ══════════ -->
+<section id="vista-marco" class="vista">
+  <div class="contenedor">
+    <h2>El marco de trabajo</h2>
+    <p class="ayuda" style="color:var(--tenue);max-width:64ch">
+      El avatar no improvisa: negocia siguiendo el mismo método que se te evalúa a ti.
+      Conocerlo de antemano no te da ventaja — te da criterio.
+    </p>
+
+    <div class="dos-columnas">
+      <div class="bloque">
+        <h3>Los objetivos: óptimo, satisfactorio, mínimo</h3>
+        <p class="ayuda" style="margin:0">
+          El <strong>óptimo</strong> es lo máximo que podrías obtener llevado al extremo. El
+          <strong>satisfactorio</strong> es lo que realmente quieres. El <strong>mínimo</strong> es
+          lo que aceptarías sin dejar de estar conforme. Donde los rangos de las dos partes se solapan
+          está la <strong>ZOPA</strong>, la zona de acuerdo posible. Fuera de ella no hay trato,
+          por bien que negocies.
+        </p>
+      </div>
+      <div class="bloque">
+        <h3>MAAN: tu alternativa</h3>
+        <p class="ayuda" style="margin:0">
+          Tu mejor alternativa a un acuerdo negociado es la única fuente real de poder en la mesa.
+          Quien puede levantarse, manda. Prepara la tuya antes de entrar y dedica parte de la
+          conversación a averiguar la suya: casi nadie lo hace.
+        </p>
+      </div>
+      <div class="bloque">
+        <h3>Las variables son el corazón</h3>
+        <p class="ayuda" style="margin:0">
+          Una negociación de una sola variable es un reparto: lo que gano lo pierdes. Con cuatro o
+          cinco variables aparece el intercambio, porque el coste y la importancia de cada una son
+          <em>distintos</em> para cada parte. Lo barato para ti y valioso para ellos es tu moneda.
+          De ahí la fórmula: <strong>si tú… entonces yo…</strong>
+        </p>
+      </div>
+      <div class="bloque">
+        <h3>Concesiones decrecientes</h3>
+        <p class="ayuda" style="margin:0">
+          10 → 9 → 8,4 → 8,1. Cada movimiento menor que el anterior, y siempre a cambio de algo.
+          Si concedes el mismo margen dos veces seguidas, acabas de enseñarle a esperar. Y nada
+          está acordado hasta que todo está acordado.
+        </p>
+      </div>
+      <div class="bloque">
+        <h3>Pregunta y escucha</h3>
+        <p class="ayuda" style="margin:0">
+          Dirige la conversación quien mejor pregunta, no quien más habla. Pregunta para averiguar,
+          comprender, construir y concretar. Verifica que has entendido antes de avanzar, resume con
+          las palabras del otro, y aprende a usar el silencio después de una oferta.
+        </p>
+      </div>
+      <div class="bloque">
+        <h3>Los cuatro perfiles</h3>
+        <p class="ayuda" style="margin:0">
+          <strong style="color:var(--rojo)">Rojo</strong>: sé breve, firme y céntrate en el resultado.
+          <strong style="color:#e2c366">Amarillo</strong>: conecta, pero resume y fija plazos.
+          <strong style="color:var(--verde)">Verde</strong>: gánate la confianza y no esperes decisiones rápidas.
+          <strong style="color:var(--azul)">Azul</strong>: ve preparado, con las cifras claras y todo por escrito.
+        </p>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h3>Cómo se te evalúa</h3>
+      <p class="ayuda">Ocho dimensiones, de 1 a 5, y cada nota va acompañada de una cita literal de lo que dijiste.</p>
+      <div class="prosa">
+        <table>
+          <tr><td><strong>Preparación y objetivos</strong></td><td>Llegaste con óptimo, satisfactorio y mínimo por variable, o improvisaste.</td></tr>
+          <tr><td><strong>MAAN</strong></td><td>Usaste tu alternativa como poder y exploraste la suya.</td></tr>
+          <tr><td><strong>Preguntas y exploración</strong></td><td>Pasaste de su posición declarada a su necesidad real.</td></tr>
+          <tr><td><strong>Escucha y autocontrol</strong></td><td>Verificaste, resumiste, usaste el silencio, no te descolocaste.</td></tr>
+          <tr><td><strong>Variables y toma y daca</strong></td><td>Negociaste en paquete o fuiste cerrando de una en una.</td></tr>
+          <tr><td><strong>Disciplina de concesiones</strong></td><td>Decrecientes y siempre a cambio de algo.</td></tr>
+          <tr><td><strong>Tácticas y contratácticas</strong></td><td>Detectaste lo que te estaban haciendo y respondiste.</td></tr>
+          <tr><td><strong>Cierre y concreción</strong></td><td>Resumiste el paquete completo y pediste confirmación.</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="principal">
+  <div class="contenedor">
+    <div>Negociador Implacable · simulador docente de negociación</div>
+    <div>Las empresas y situaciones de los casos son ficción con fines formativos.</div>
+  </div>
+</footer>
+
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
