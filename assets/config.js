@@ -1,7 +1,11 @@
 /**
  * Configuración del sitio.
  *
- * Pega aquí la URL de tu Worker de Cloudflare, sin barra final.
- * La obtienes al desplegar: algo como https://negociador-implacable.TUCUENTA.workers.dev
+ * Pon aquí la URL de tu servicio en Render, sin barra final.
+ * La ves en el panel de Render, arriba, y tiene esta forma:
+ *
+ *   window.NEGOCIADOR_API = 'https://negociador-implacable-api.onrender.com';
+ *
+ * Es lo único que hay que tocar de la web una vez desplegado el servidor.
  */
-window.NEGOCIADOR_API = 'https://negociador-implacable.TU-CUENTA.workers.dev';
+window.NEGOCIADOR_API = 'https://PON-AQUI-TU-SERVICIO.onrender.com';

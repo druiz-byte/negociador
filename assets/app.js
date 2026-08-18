@@ -2,6 +2,9 @@
    Sin dependencias externas. Todo el estado vive en el navegador;
    las fichas confidenciales del avatar nunca llegan hasta aquí. */
 
+/* Si el sitio y el servidor viven juntos (Render), NEGOCIADOR_API queda vacío
+   y las llamadas van al mismo origen. Si están separados (GitHub Pages +
+   Cloudflare), aquí va la URL del worker. */
 const API = (window.NEGOCIADOR_API || '').replace(/\/+$/, '');
 
 const estado = {
@@ -105,21 +108,49 @@ document.addEventListener('click', (e) => {
 
 /* ─────────── Biblioteca de casos ─────────── */
 
-async function cargarCasos() {
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* El servidor gratuito de Render se duerme tras un rato sin visitas y tarda
+   cerca de un minuto en despertar. Lanzamos un aviso nada más cargar la
+   portada para que vaya arrancando mientras el usuario lee. */
+function despertarServidor() {
+  fetch(`${API}/api/salud`, { cache: 'no-store' }).catch(() => {});
+}
+
+async function cargarCasos({ intento = 1 } = {}) {
   const lista = $('#lista-casos');
   lista.innerHTML = '<p style="color:var(--tenue)">Cargando casos…</p>';
+
+  const aviso = setTimeout(() => {
+    lista.innerHTML = `<div class="aviso info">
+      <strong>Despertando el servidor…</strong><br>
+      El simulador se apaga cuando nadie lo usa y tarda cerca de un minuto en volver.
+      Solo pasa la primera vez; a partir de ahí va inmediato.
+    </div>`;
+  }, 4000);
+
   try {
-    const r = await fetch(`${API}/api/casos`);
+    const r = await fetch(`${API}/api/casos`, { cache: 'no-store' });
+    clearTimeout(aviso);
     if (!r.ok) throw new Error('respuesta ' + r.status);
     const datos = await r.json();
     estado.casos = datos.casos || [];
     pintarFiltros();
     pintarCasos();
   } catch (err) {
+    clearTimeout(aviso);
+    if (intento < 3) {
+      lista.innerHTML = `<div class="aviso info">Despertando el servidor… (intento ${intento + 1} de 3)</div>`;
+      await esperar(6000);
+      return cargarCasos({ intento: intento + 1 });
+    }
     lista.innerHTML = `<div class="aviso">
-      No se ha podido cargar la biblioteca de casos. El servicio puede estar apagado o mal configurado.
-      <br><small>Detalle técnico: ${escapar(String(err.message || err))}</small>
+      No se ha podido contactar con el servidor del simulador. Puede estar caído o en mantenimiento.
+      <br><br><button class="boton secundario" id="btn-reintentar">Reintentar</button>
+      <br><br><small>Detalle técnico: ${escapar(String(err.message || err))}</small>
     </div>`;
+    const b = $('#btn-reintentar');
+    if (b) b.addEventListener('click', () => cargarCasos());
   }
 }
 
@@ -278,6 +309,15 @@ async function hablarConAvatar() {
   caja.innerHTML = '<span class="escribiendo"><i></i><i></i><i></i></span>';
 
   let acumulado = '';
+
+  // Si tarda demasiado, casi siempre es que el servidor estaba dormido.
+  const avisoLento = setTimeout(() => {
+    if (!acumulado) {
+      caja.innerHTML =
+        '<span class="escribiendo"><i></i><i></i><i></i></span>' +
+        '<div style="color:var(--tenue);font-size:.85rem;margin-top:8px">Despertando el servidor, un momento…</div>';
+    }
+  }, 7000);
   try {
     const r = await fetch(`${API}/api/chat`, {
       method: 'POST',
@@ -289,6 +329,8 @@ async function hablarConAvatar() {
         mensajes: estado.mensajes,
       }),
     });
+
+    clearTimeout(avisoLento);
 
     if (!r.ok) {
       let mensaje = 'No se ha podido contactar con el avatar.';
@@ -342,6 +384,7 @@ async function hablarConAvatar() {
   } catch (err) {
     caja.innerHTML = `<span style="color:var(--rojo)">Error de conexión: ${escapar(String(err.message || err))}</span>`;
   } finally {
+    clearTimeout(avisoLento);
     estado.ocupado = false;
     $('#btn-enviar').disabled = false;
     $('#sala-turnos').textContent = String(estado.mensajes.filter((m) => m.role === 'user').length);
@@ -486,14 +529,16 @@ $('#btn-descargar-prep').addEventListener('click', () => {
 
 /* ─────────── Arranque ─────────── */
 
-if (!API || API.includes('TU-CUENTA')) {
+if (!API || API.includes('PON-AQUI')) {
   document.body.insertAdjacentHTML(
     'afterbegin',
     `<div class="contenedor"><div class="aviso" style="margin-top:16px">
-      El sitio todavía no apunta a ningún servidor. Edita <code>assets/config.js</code>
-      y pon ahí la URL de tu Worker de Cloudflare.
+      La web todavía no apunta a ningún servidor: los casos y la sala de negociación no
+      funcionarán. Edita <code>assets/config.js</code> y pon ahí la URL de tu servicio en Render.
     </div></div>`
   );
+} else {
+  despertarServidor();
 }
 
 cargarCasos();
