@@ -197,7 +197,16 @@ table.editable input { padding: 7px 9px; font-size: .88rem; }
 /* ─── Sala de negociación ─── */
 
 .sala { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
-@media (max-width: 940px) { .sala { grid-template-columns: 1fr; } }
+
+/* En pantallas estrechas la conversación va primero y los detalles debajo:
+   al entrar en la sala lo primero que se ve es la caja de conversación. */
+@media (max-width: 940px) {
+  .sala { grid-template-columns: 1fr; }
+  .sala .zona-chat { order: 1; }
+  .sala .panel-lateral { order: 2; position: static; top: auto; max-height: none; overflow: visible; }
+  #sala-recordatorio { max-height: none; overflow: visible; }
+  .conversacion { min-height: 52vh; max-height: 62vh; }
+}
 
 .panel-lateral { position: sticky; top: 78px; max-height: calc(100vh - 96px); overflow-y: auto; }
 #sala-recordatorio { max-height: 32vh; overflow-y: auto; padding-right: 4px; }

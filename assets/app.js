@@ -98,7 +98,13 @@ function ir(vista) {
     b.setAttribute('aria-current', String(b.dataset.ir === vista))
   );
   window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
-  if (vista === 'preparacion') montarTablasPreparacion();
+  if (vista === 'preparacion') { montarTablasPreparacion(); actualizarNotaPrep(); }
+}
+
+function actualizarNotaPrep() {
+  const nota = document.getElementById('nota-prep');
+  if (!nota) return;
+  nota.textContent = estado.briefing ? '' : 'Elige un caso antes de entrar en la sala.';
 }
 
 document.addEventListener('click', (e) => {
@@ -255,14 +261,22 @@ $('#btn-empezar').addEventListener('click', async () => {
   }
 });
 
-$('#btn-imprimir-briefing').addEventListener('click', () => window.print());
-
 /* ─────────── Sala de negociación ─────────── */
 
 const NOMBRE_COLOR = { rojo: 'Rojo', amarillo: 'Amarillo', verde: 'Verde', azul: 'Azul', oculto: 'Oculto' };
 const NOMBRE_DUREZA = { 1: '1 · Colaborativo', 2: '2 · Firme', 3: '3 · Implacable', 4: '4 · Hostil' };
 
-$('#btn-a-la-sala').addEventListener('click', () => {
+function entrarEnLaSala() {
+  // Sin caso configurado no hay sala: mandamos a elegir uno.
+  if (!estado.caso || !estado.briefing) {
+    const nota = $('#nota-prep');
+    if (nota) nota.textContent = 'Elige antes un caso y tu papel.';
+    ir('casos');
+    return;
+  }
+  // Si ya hay una negociación en curso, volvemos a ella sin reiniciarla.
+  if (estado.mensajes.length && !estado.terminada) { ir('sala'); return; }
+
   estado.mensajes = [];
   estado.terminada = false;
   $('#conversacion').innerHTML = '';
@@ -276,7 +290,10 @@ $('#btn-a-la-sala').addEventListener('click', () => {
   $('#btn-tiempo-muerto').classList.toggle('oculto', estado.config.modo !== 'coach');
   ir('sala');
   hablarConSimulacion();
-});
+}
+
+$('#btn-a-la-sala').addEventListener('click', entrarEnLaSala);
+$('#btn-prep-a-la-sala').addEventListener('click', entrarEnLaSala);
 
 $('#btn-salir').addEventListener('click', () => {
   if (estado.mensajes.length && !estado.terminada) {
@@ -496,35 +513,306 @@ $('#btn-borrar-prep').addEventListener('click', () => {
   $$('[data-prep]').forEach((el) => (el.value = ''));
 });
 
-$('#btn-descargar-prep').addEventListener('click', () => {
-  const v = (id) => (document.getElementById(id) || {}).value || '';
+/* ─── Descarga de la hoja en PDF ───
+   Se genera en el navegador con jsPDF, replicando los colores y la
+   estructura de la web. Los huecos sin rellenar salen como "No contestado". */
+
+const SIN_RESPUESTA = 'No contestado';
+
+const COLOR_PDF = {
+  fondo: [13, 16, 22],
+  fondo2: [20, 25, 34],
+  superficie: [25, 31, 42],
+  borde: [40, 48, 61],
+  texto: [232, 234, 238],
+  tenue: [152, 163, 179],
+  acento: [224, 164, 88],
+};
+
+/* La librería viaja con la web (assets/vendor/), así que el PDF también
+   funciona en redes que bloquean CDN externas. Si el fichero faltara,
+   se intenta la copia pública de cdnjs. */
+const FUENTES_JSPDF = [
+  'assets/vendor/jspdf.umd.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js',
+];
+let promesaJsPDF = null;
+
+function cargarGuion(src) {
+  return new Promise((resolver, rechazar) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolver;
+    s.onerror = () => rechazar(new Error('no se ha podido cargar ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+function cargarJsPDF() {
+  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+  if (!promesaJsPDF) {
+    promesaJsPDF = (async () => {
+      let ultimo;
+      for (const src of FUENTES_JSPDF) {
+        try {
+          await cargarGuion(src);
+          if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+          ultimo = new Error('jsPDF no se ha inicializado');
+        } catch (err) { ultimo = err; }
+      }
+      throw ultimo || new Error('no se ha podido cargar la librería de PDF');
+    })().catch((err) => { promesaJsPDF = null; throw err; });
+  }
+  return promesaJsPDF;
+}
+
+/* Valor de un campo; cadena vacía si no hay nada escrito. */
+function valorPrep(id) {
+  const el = document.getElementById(id);
+  const s = el && typeof el.value === 'string' ? el.value.trim() : '';
+  return s;
+}
+
+function variablesPrep() {
   const datos = leerPrep();
-  const variables = datos.variables && datos.variables.length ? datos.variables : ['', '', '', '', ''];
+  return datos.variables && datos.variables.length ? datos.variables : ['', '', '', '', ''];
+}
+
+async function descargarHojaPdf() {
+  const JsPDF = await cargarJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: true });
+
+  const ANCHO_PAG = 210, ALTO_PAG = 297, M = 16;
+  const ancho = ANCHO_PAG - M * 2;
+  const LIMITE = ALTO_PAG - 20;
+  let y = 0, pagina = 1;
+
+  const fondo = () => { doc.setFillColor(...COLOR_PDF.fondo); doc.rect(0, 0, ANCHO_PAG, ALTO_PAG, 'F'); };
+  const pie = () => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...COLOR_PDF.tenue);
+    doc.text('Negociador Implacable · simulador docente de negociación', M, ALTO_PAG - 10);
+    doc.text(String(pagina), ANCHO_PAG - M, ALTO_PAG - 10, { align: 'right' });
+  };
+  const saltarPagina = () => { pie(); doc.addPage(); pagina++; fondo(); y = M + 8; };
+  const espacio = (alto) => { if (y + alto > LIMITE) saltarPagina(); };
+
+  fondo();
+  y = M + 6;
+
+  /* ── Cabecera ── */
+  doc.setFillColor(...COLOR_PDF.acento);
+  doc.circle(M + 1.6, y - 1.4, 1.5, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...COLOR_PDF.acento);
+  doc.text('NEGOCIADOR IMPLACABLE', M + 5.6, y);
+  y += 10;
+  doc.setFontSize(19); doc.setTextColor(...COLOR_PDF.texto);
+  doc.text('Hoja de preparación', M, y);
+  y += 8;
+
+  const meta = [
+    ['Caso', estado.caso ? estado.caso.titulo : ''],
+    ['Mi papel', estado.briefing ? estado.briefing.rol.nombre : ''],
+    ['Fecha', new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })],
+  ];
+  const altoMeta = meta.length * 6 + 6;
+  doc.setFillColor(...COLOR_PDF.fondo2);
+  doc.setDrawColor(...COLOR_PDF.borde); doc.setLineWidth(0.2);
+  doc.roundedRect(M, y - 1, ancho, altoMeta, 2, 2, 'FD');
+  y += 4;
+  meta.forEach(([etiqueta, valor], i) => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.setTextColor(...COLOR_PDF.tenue);
+    doc.text(etiqueta, M + 4, y);
+    const vacio = !valor;
+    doc.setFont('helvetica', vacio ? 'normal' : 'bold');
+    doc.setTextColor(...(vacio ? COLOR_PDF.tenue : COLOR_PDF.texto));
+    doc.text(vacio ? SIN_RESPUESTA : valor, ANCHO_PAG - M - 4, y, { align: 'right' });
+    if (i < meta.length - 1) {
+      doc.setDrawColor(...COLOR_PDF.borde);
+      doc.line(M + 4, y + 1.8, ANCHO_PAG - M - 4, y + 1.8);
+    }
+    y += 6;
+  });
+  y += 8;
+
+  /* ── Ayudas de dibujo ── */
+  const seccion = (numero, titulo, sub) => {
+    espacio(20);
+    doc.setFillColor(...COLOR_PDF.acento);
+    doc.rect(M, y - 4, 1.8, 5.4, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.setTextColor(...COLOR_PDF.texto);
+    const t = `${numero} · ${titulo}`;
+    doc.text(t, M + 5, y);
+    if (sub) {
+      const w = doc.getTextWidth(t);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      doc.setTextColor(...COLOR_PDF.tenue);
+      doc.text(sub, M + 5 + w + 3, y);
+    }
+    y += 7;
+  };
+
+  const tabla = (cabeceras, filas, anchos) => {
+    const alto = 7;
+    const cabecera = () => {
+      espacio(alto + 8);
+      doc.setFillColor(...COLOR_PDF.superficie);
+      doc.setDrawColor(...COLOR_PDF.borde); doc.setLineWidth(0.2);
+      doc.rect(M, y - 4.4, ancho, alto, 'FD');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...COLOR_PDF.tenue);
+      let x = M;
+      cabeceras.forEach((c, i) => {
+        if (i) doc.line(x, y - 4.4, x, y - 4.4 + alto);
+        doc.text(String(c).toUpperCase(), x + 2, y);
+        x += anchos[i];
+      });
+      y += alto;
+    };
+    cabecera();
+    filas.forEach((fila) => {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+      const celdas = fila.map((t, i) => doc.splitTextToSize(String(t), anchos[i] - 4));
+      const nLineas = celdas.reduce((m, c) => Math.max(m, c.length), 1);
+      const altoFila = Math.max(alto, nLineas * 4 + 3);
+      if (y - 4.4 + altoFila > LIMITE) { saltarPagina(); cabecera(); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); }
+      doc.setFillColor(...COLOR_PDF.fondo2);
+      doc.setDrawColor(...COLOR_PDF.borde); doc.setLineWidth(0.2);
+      doc.rect(M, y - 4.4, ancho, altoFila, 'FD');
+      let x = M;
+      celdas.forEach((lineas, i) => {
+        if (i) doc.line(x, y - 4.4, x, y - 4.4 + altoFila);
+        doc.setTextColor(...(fila[i] === SIN_RESPUESTA ? COLOR_PDF.tenue : COLOR_PDF.texto));
+        lineas.forEach((l, j) => doc.text(l, x + 2, y + j * 4));
+        x += anchos[i];
+      });
+      y += altoFila;
+    });
+    y += 8;
+  };
+
+  const campo = (etiqueta, valor) => {
+    const vacio = !valor;
+    const texto = vacio ? SIN_RESPUESTA : valor;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+    const lineas = doc.splitTextToSize(texto, ancho - 8);
+    espacio(6 + lineas.length * 5 + 4);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...COLOR_PDF.tenue);
+    doc.text(etiqueta.toUpperCase(), M, y);
+    y += 5;
+    const arriba = y - 3.4;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+    doc.setTextColor(...(vacio ? COLOR_PDF.tenue : COLOR_PDF.texto));
+    lineas.forEach((l) => { doc.text(l, M + 4, y); y += 5; });
+    doc.setDrawColor(...(vacio ? COLOR_PDF.borde : COLOR_PDF.acento));
+    doc.setLineWidth(0.6);
+    doc.line(M + 0.6, arriba, M + 0.6, y - 4.4);
+    doc.setLineWidth(0.2);
+    y += 5;
+  };
+
+  /* ── Contenido ── */
+  const variables = variablesPrep();
+  const oNo = (s) => (s ? s : SIN_RESPUESTA);
+
+  seccion('1', 'Mis objetivos por variable', 'óptimo, satisfactorio, mínimo');
+  tabla(
+    ['Variable', 'Óptimo', 'Satisfactorio', 'Mínimo'],
+    variables.map((_, i) => [
+      oNo(valorPrep(`obj-${i}-var`)),
+      oNo(valorPrep(`obj-${i}-opt`)),
+      oNo(valorPrep(`obj-${i}-sat`)),
+      oNo(valorPrep(`obj-${i}-min`)),
+    ]),
+    [46, 44, 44, 44]
+  );
+
+  seccion('2', 'Coste e importancia', 'el mapa del toma y daca');
+  tabla(
+    ['Variable', 'Me cuesta', 'Me importa', 'Les cuesta', 'Les importa'],
+    variables.map((_, i) => [
+      oNo(valorPrep(`var-${i}-nom`)),
+      oNo(valorPrep(`var-${i}-mc`)),
+      oNo(valorPrep(`var-${i}-mi`)),
+      oNo(valorPrep(`var-${i}-lc`)),
+      oNo(valorPrep(`var-${i}-li`)),
+    ]),
+    [50, 32, 32, 32, 32]
+  );
+
+  seccion('3', 'MAAN', 'mi alternativa y la suya');
+  campo('Mi mejor alternativa si no hay acuerdo', valorPrep('p-maan-mio'));
+  campo('Su alternativa probable', valorPrep('p-maan-suyo'));
+
+  seccion('4', 'Posición, intereses, necesidad');
+  campo('Lo que dirán que quieren', valorPrep('p-posicion'));
+  campo('Lo que probablemente les mueve', valorPrep('p-intereses'));
+  campo('Lo que de verdad necesitan', valorPrep('p-necesidad'));
+
+  seccion('5', 'Mis preguntas', 'por escrito, como manda el marco');
+  campo('Para averiguar', valorPrep('p-preg-averiguar'));
+  campo('Para comprender', valorPrep('p-preg-comprender'));
+  campo('Para construir', valorPrep('p-preg-construir'));
+  campo('Para concretar', valorPrep('p-preg-concretar'));
+  campo('La pregunta más difícil que me pueden hacer, y mi respuesta', valorPrep('p-preg-dificil'));
+
+  seccion('6', 'Mi apertura', 'y los tres primeros movimientos');
+  campo('Oferta inicial', valorPrep('p-apertura'));
+  campo('Movimiento 2', valorPrep('p-mov2'));
+  campo('Movimiento 3', valorPrep('p-mov3'));
+  campo('Tácticas que espero y mi respuesta', valorPrep('p-tacticas'));
+
+  pie();
+  doc.save('hoja-preparacion-negociacion.pdf');
+}
+
+/* Si el PDF no se puede generar (sin red, CDN bloqueada), se descarga
+   la misma hoja en texto para no dejar al usuario sin nada. */
+function descargarHojaMarkdown() {
+  const v = valorPrep;
+  const oNo = (s) => (s ? s : SIN_RESPUESTA);
+  const variables = variablesPrep();
 
   let t = '# Hoja de preparación de la negociación\n\n';
-  if (estado.caso) t += `**Caso**: ${estado.caso.titulo}\n\n`;
-  if (estado.briefing) t += `**Mi papel**: ${estado.briefing.rol.nombre}\n\n`;
+  t += `**Caso**: ${oNo(estado.caso ? estado.caso.titulo : '')}\n\n`;
+  t += `**Mi papel**: ${oNo(estado.briefing ? estado.briefing.rol.nombre : '')}\n\n`;
 
   t += '## 1. Objetivos por variable\n\n| Variable | Óptimo | Satisfactorio | Mínimo |\n|---|---|---|---|\n';
   variables.forEach((_, i) => {
-    t += `| ${v(`obj-${i}-var`)} | ${v(`obj-${i}-opt`)} | ${v(`obj-${i}-sat`)} | ${v(`obj-${i}-min`)} |\n`;
+    t += `| ${oNo(v(`obj-${i}-var`))} | ${oNo(v(`obj-${i}-opt`))} | ${oNo(v(`obj-${i}-sat`))} | ${oNo(v(`obj-${i}-min`))} |\n`;
   });
 
   t += '\n## 2. Coste e importancia\n\n| Variable | Me cuesta | Me importa | Les cuesta | Les importa |\n|---|---|---|---|---|\n';
   variables.forEach((_, i) => {
-    t += `| ${v(`var-${i}-nom`)} | ${v(`var-${i}-mc`)} | ${v(`var-${i}-mi`)} | ${v(`var-${i}-lc`)} | ${v(`var-${i}-li`)} |\n`;
+    t += `| ${oNo(v(`var-${i}-nom`))} | ${oNo(v(`var-${i}-mc`))} | ${oNo(v(`var-${i}-mi`))} | ${oNo(v(`var-${i}-lc`))} | ${oNo(v(`var-${i}-li`))} |\n`;
   });
 
-  t += `\n## 3. MAAN\n\n**El mío**: ${v('p-maan-mio')}\n\n**El suyo**: ${v('p-maan-suyo')}\n`;
-  t += `\n## 4. Posición, intereses, necesidad\n\n- Posición: ${v('p-posicion')}\n- Intereses: ${v('p-intereses')}\n- Necesidad: ${v('p-necesidad')}\n`;
-  t += `\n## 5. Preguntas\n\n- Para averiguar: ${v('p-preg-averiguar')}\n- Para comprender: ${v('p-preg-comprender')}\n- Para construir: ${v('p-preg-construir')}\n- Para concretar: ${v('p-preg-concretar')}\n- La más difícil que me pueden hacer: ${v('p-preg-dificil')}\n`;
-  t += `\n## 6. Apertura\n\n1. ${v('p-apertura')}\n2. ${v('p-mov2')}\n3. ${v('p-mov3')}\n\n**Tácticas esperadas**: ${v('p-tacticas')}\n`;
+  t += `\n## 3. MAAN\n\n**El mío**: ${oNo(v('p-maan-mio'))}\n\n**El suyo**: ${oNo(v('p-maan-suyo'))}\n`;
+  t += `\n## 4. Posición, intereses, necesidad\n\n- Posición: ${oNo(v('p-posicion'))}\n- Intereses: ${oNo(v('p-intereses'))}\n- Necesidad: ${oNo(v('p-necesidad'))}\n`;
+  t += `\n## 5. Preguntas\n\n- Para averiguar: ${oNo(v('p-preg-averiguar'))}\n- Para comprender: ${oNo(v('p-preg-comprender'))}\n- Para construir: ${oNo(v('p-preg-construir'))}\n- Para concretar: ${oNo(v('p-preg-concretar'))}\n- La más difícil que me pueden hacer: ${oNo(v('p-preg-dificil'))}\n`;
+  t += `\n## 6. Apertura\n\n1. ${oNo(v('p-apertura'))}\n2. ${oNo(v('p-mov2'))}\n3. ${oNo(v('p-mov3'))}\n\n**Tácticas esperadas**: ${oNo(v('p-tacticas'))}\n`;
 
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([t], { type: 'text/markdown;charset=utf-8' }));
-  a.download = 'preparacion-negociacion.md';
+  a.download = 'hoja-preparacion-negociacion.md';
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+$('#btn-descargar-prep').addEventListener('click', async () => {
+  const btn = $('#btn-descargar-prep');
+  const etiqueta = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Generando el PDF…';
+  try {
+    await descargarHojaPdf();
+  } catch (err) {
+    console.error(err);
+    alert('No se ha podido generar el PDF (' + (err.message || err) + '). Te descargo la hoja en texto.');
+    descargarHojaMarkdown();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = etiqueta;
+  }
 });
 
 /* ─────────── Arranque ─────────── */
