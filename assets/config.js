@@ -8,4 +8,4 @@
  *
  * Es lo único que hay que tocar de la web una vez desplegado el servidor.
  */
-window.NEGOCIADOR_API = 'https://PON-AQUI-TU-SERVICIO.onrender.com';
+window.NEGOCIADOR_API = 'https://negociador-tabs.onrender.com';
