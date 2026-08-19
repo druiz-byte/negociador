@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Negociador Implacable — simulador de negociación para directivos</title>
-<meta name="description" content="Entrena habilidades de negociación comercial, de compras y de gestión de proyectos contra un avatar que negocia en serio: con límites confidenciales, tácticas y un informe de evaluación al final.">
+<meta name="description" content="Entrena habilidades de negociación comercial, de compras y de gestión de proyectos en una simulación que negocia en serio: con límites confidenciales, tácticas y un informe de evaluación al final.">
 <meta property="og:title" content="Negociador Implacable">
-<meta property="og:description" content="Simulador de negociación para directivos. Elige el caso, el papel del avatar y la dureza. Negocia. Recibe tu evaluación.">
+<meta property="og:description" content="Simulador de negociación para directivos. Elige el caso, el papel de la simulación y la dureza. Negocia. Recibe tu evaluación.">
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="assets/estilos.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23e0a458'/></svg>">
@@ -34,7 +34,7 @@
       <span class="etiqueta">Simulador de negociación</span>
       <h1>Negocia contra alguien que<br><span class="destacado">no te lo va a poner fácil</span>.</h1>
       <p class="entrada">
-        Un avatar que interpreta a la otra parte en serio: con sus propios objetivos, sus límites
+        Una simulación que interpreta a la otra parte en serio: con sus propios objetivos, sus límites
         confidenciales, su alternativa si no hay acuerdo y un repertorio de treinta tácticas que
         usará contigo sin avisar. Cuando cerréis —o rompáis— te dirá exactamente dónde ganaste
         y dónde dejaste valor sobre la mesa.
@@ -53,8 +53,8 @@
       </div>
       <div class="paso">
         <div class="num">2</div>
-        <h3>Configura al avatar</h3>
-        <p>Contraparte, evaluador o coach. Cinco niveles de dureza y cuatro perfiles conductuales.</p>
+        <h3>Configura la simulación</h3>
+        <p>Contraparte, evaluador o coach. Cuatro niveles de dureza y cuatro perfiles conductuales.</p>
       </div>
       <div class="paso">
         <div class="num">3</div>
@@ -69,9 +69,9 @@
     </div>
 
     <div class="bloque">
-      <h3>Por qué un avatar y no un compañero de curso</h3>
+      <h3>Por qué una simulación y no un compañero de curso</h3>
       <p class="ayuda" style="margin-bottom:0">
-        Porque el avatar no se corta, no te conoce, no te va a dejar ganar por cortesía y no se cansa
+        Porque la simulación no se corta, no te conoce, no te va a dejar ganar por cortesía y no se cansa
         de repetir el mismo caso hasta que te salga bien. Y porque recuerda todo lo que dijiste:
         el informe final cita tus frases exactas, no impresiones.
       </p>
@@ -85,7 +85,7 @@
     <h2>Biblioteca de casos</h2>
     <p class="ayuda" style="color:var(--tenue);max-width:62ch">
       Cada caso tiene dos papeles con objetivos incompatibles y límites confidenciales.
-      Tú ves solo tu mitad; el avatar juega la otra.
+      Tú ves solo tu mitad; la simulación juega la otra.
     </p>
     <div class="filtros" id="filtros"></div>
     <div class="rejilla" id="lista-casos"></div>
@@ -100,12 +100,12 @@
     <p class="ayuda" style="color:var(--tenue)" id="config-sub"></p>
 
     <div class="bloque">
-      <h3>Tu papel <small>eliges un lado; el avatar juega el otro</small></h3>
+      <h3>Tu papel <small>eliges un lado; la simulación juega el otro</small></h3>
       <div class="opciones" id="opciones-rol"></div>
     </div>
 
     <div class="bloque">
-      <h3>Qué quieres que sea el avatar</h3>
+      <h3>Qué quieres que sea la simulación</h3>
       <div class="opciones" id="opciones-modo">
         <button class="opcion" data-campo="modo" data-valor="contraparte">
           <strong>Solo contraparte</strong><span>Negocia y nada más. Máximo realismo, sin evaluación.</span>
@@ -124,18 +124,17 @@
 
     <div class="bloque">
       <h3>Dureza</h3>
-      <p class="ayuda">Si es tu primera vez, empieza en 3. El nivel 5 no perdona nada.</p>
+      <p class="ayuda">Si es tu primera vez, empieza en 2. El nivel 4 no perdona nada.</p>
       <div class="opciones" id="opciones-dureza">
         <button class="opcion" data-campo="dureza" data-valor="1"><strong>1 · Colaborativo</strong><span>Comparte información y casi no usa tácticas.</span></button>
-        <button class="opcion" data-campo="dureza" data-valor="2"><strong>2 · Firme</strong><span>Defiende sus posiciones. Alguna táctica suave.</span></button>
-        <button class="opcion" data-campo="dureza" data-valor="3" aria-pressed="true"><strong>3 · Duro</strong><span>Ancla alto y no concede nada sin contrapartida.</span></button>
-        <button class="opcion" data-campo="dureza" data-valor="4"><strong>4 · Implacable</strong><span>Presiona con plazos y alternativas. Castiga la falta de preparación.</span></button>
-        <button class="opcion" data-campo="dureza" data-valor="5"><strong>5 · Hostil</strong><span>Ultimátums, agresividad y amenaza real de romper.</span></button>
+        <button class="opcion" data-campo="dureza" data-valor="2" aria-pressed="true"><strong>2 · Firme</strong><span>Defiende sus posiciones. Alguna táctica suave.</span></button>
+        <button class="opcion" data-campo="dureza" data-valor="3"><strong>3 · Implacable</strong><span>Presiona con plazos y alternativas. Castiga la falta de preparación.</span></button>
+        <button class="opcion" data-campo="dureza" data-valor="4"><strong>4 · Hostil</strong><span>Ultimátums, agresividad y amenaza real de romper.</span></button>
       </div>
     </div>
 
     <div class="bloque">
-      <h3>Perfil conductual del avatar</h3>
+      <h3>Perfil conductual de la simulación</h3>
       <p class="ayuda">Cada perfil exige una forma distinta de tratarlo. «Oculto» es el mejor ejercicio: deberás identificarlo tú.</p>
       <div class="opciones" id="opciones-color">
         <button class="opcion color-rojo" data-campo="color" data-valor="rojo"><strong>Rojo · impulsor</strong><span>Directo, impaciente, orientado al resultado.</span></button>
@@ -159,7 +158,7 @@
     <button class="boton fantasma" data-ir="configurar" style="margin-bottom:20px">← Cambiar la configuración</button>
     <h2>Tu briefing confidencial</h2>
     <p class="ayuda" style="color:var(--tenue);max-width:64ch">
-      Esto es lo que sabes tú. El avatar tiene su propia ficha, con sus objetivos y sus límites,
+      Esto es lo que sabes tú. La simulación tiene su propia ficha, con sus objetivos y sus límites,
       y no la vas a ver hasta el informe final. Prepárate antes de entrar: según el marco del curso,
       el resultado de una negociación se decide en buena medida antes de sentarse.
     </p>
@@ -192,7 +191,7 @@
           <h3>La mesa</h3>
           <div class="dato"><span>Caso</span><span id="sala-caso">—</span></div>
           <div class="dato"><span>Tú</span><span id="sala-yo">—</span></div>
-          <div class="dato"><span>Avatar</span><span id="sala-avatar">—</span></div>
+          <div class="dato"><span>Simulación</span><span id="sala-simulacion">—</span></div>
           <div class="dato"><span>Dureza</span><span id="sala-dureza">—</span></div>
           <div class="dato"><span>Perfil</span><span id="sala-color">—</span></div>
           <div class="dato"><span>Intervenciones</span><span id="sala-turnos">0</span></div>
@@ -316,7 +315,7 @@
   <div class="contenedor">
     <h2>El marco de trabajo</h2>
     <p class="ayuda" style="color:var(--tenue);max-width:64ch">
-      El avatar no improvisa: negocia siguiendo el mismo método que se te evalúa a ti.
+      La simulación no improvisa: negocia siguiendo el mismo método que se te evalúa a ti.
       Conocerlo de antemano no te da ventaja — te da criterio.
     </p>
 

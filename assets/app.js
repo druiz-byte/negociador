@@ -1,6 +1,6 @@
 /* Negociador Implacable — front-end
    Sin dependencias externas. Todo el estado vive en el navegador;
-   las fichas confidenciales del avatar nunca llegan hasta aquí. */
+   las fichas confidenciales de la simulación nunca llegan hasta aquí. */
 
 /* Si el sitio y el servidor viven juntos (Render), NEGOCIADOR_API queda vacío
    y las llamadas van al mismo origen. Si están separados (GitHub Pages +
@@ -12,7 +12,7 @@ const estado = {
   filtro: 'todos',
   caso: null,
   rolId: null,
-  config: { modo: 'evaluador', dureza: 3, color: 'oculto' },
+  config: { modo: 'evaluador', dureza: 2, color: 'oculto' },
   briefing: null,
   mensajes: [],
   ocupado: false,
@@ -208,7 +208,7 @@ function abrirConfigurador(casoId) {
       $$('#opciones-rol .opcion').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
       $('#btn-empezar').disabled = false;
       const otro = estado.caso.roles.find((r) => r.id !== estado.rolId);
-      $('#nota-config').textContent = `El avatar interpretará a ${otro.nombre}.`;
+      $('#nota-config').textContent = `La simulación interpretará a ${otro.nombre}.`;
     })
   );
   $('#btn-empezar').disabled = true;
@@ -260,7 +260,7 @@ $('#btn-imprimir-briefing').addEventListener('click', () => window.print());
 /* ─────────── Sala de negociación ─────────── */
 
 const NOMBRE_COLOR = { rojo: 'Rojo', amarillo: 'Amarillo', verde: 'Verde', azul: 'Azul', oculto: 'Oculto' };
-const NOMBRE_DUREZA = { 1: '1 · Colaborativo', 2: '2 · Firme', 3: '3 · Duro', 4: '4 · Implacable', 5: '5 · Hostil' };
+const NOMBRE_DUREZA = { 1: '1 · Colaborativo', 2: '2 · Firme', 3: '3 · Implacable', 4: '4 · Hostil' };
 
 $('#btn-a-la-sala').addEventListener('click', () => {
   estado.mensajes = [];
@@ -268,14 +268,14 @@ $('#btn-a-la-sala').addEventListener('click', () => {
   $('#conversacion').innerHTML = '';
   $('#sala-caso').textContent = estado.caso.titulo;
   $('#sala-yo').textContent = estado.briefing.rol.nombre;
-  $('#sala-avatar').textContent = estado.briefing.contraparte.nombre;
+  $('#sala-simulacion').textContent = estado.briefing.contraparte.nombre;
   $('#sala-dureza').textContent = NOMBRE_DUREZA[estado.config.dureza];
   $('#sala-color').textContent = NOMBRE_COLOR[estado.config.color];
   $('#sala-turnos').textContent = '0';
   $('#sala-recordatorio').innerHTML = md(estado.briefing.rol.briefing);
   $('#btn-tiempo-muerto').classList.toggle('oculto', estado.config.modo !== 'coach');
   ir('sala');
-  hablarConAvatar();
+  hablarConSimulacion();
 });
 
 $('#btn-salir').addEventListener('click', () => {
@@ -299,12 +299,12 @@ function esInforme(texto) {
   return /^##\s*Resultado/m.test(texto) || /^##\s*Puntuaci/m.test(texto);
 }
 
-async function hablarConAvatar() {
+async function hablarConSimulacion() {
   if (estado.ocupado) return;
   estado.ocupado = true;
   $('#btn-enviar').disabled = true;
 
-  const contenedor = turno('avatar', '', estado.briefing.contraparte.nombre);
+  const contenedor = turno('simulacion', '', estado.briefing.contraparte.nombre);
   const caja = contenedor.querySelector('.texto');
   caja.innerHTML = '<span class="escribiendo"><i></i><i></i><i></i></span>';
 
@@ -333,7 +333,7 @@ async function hablarConAvatar() {
     clearTimeout(avisoLento);
 
     if (!r.ok) {
-      let mensaje = 'No se ha podido contactar con el avatar.';
+      let mensaje = 'No se ha podido contactar con la simulación.';
       try { mensaje = (await r.json()).error || mensaje; } catch {}
       caja.innerHTML = `<span style="color:var(--rojo)">${escapar(mensaje)}</span>`;
       return;
@@ -368,7 +368,7 @@ async function hablarConAvatar() {
     }
 
     if (!acumulado) {
-      caja.innerHTML = '<span style="color:var(--rojo)">El avatar no ha respondido. Reintenta.</span>';
+      caja.innerHTML = '<span style="color:var(--rojo)">La simulación no ha respondido. Reintenta.</span>';
       return;
     }
 
@@ -401,7 +401,7 @@ function enviar(texto) {
   estado.mensajes.push({ role: 'user', content: t });
   turno('mio', t, 'Tú');
   $('#entrada').value = '';
-  hablarConAvatar();
+  hablarConSimulacion();
 }
 
 $('#btn-enviar').addEventListener('click', () => enviar($('#entrada').value));
@@ -410,7 +410,7 @@ $('#entrada').addEventListener('keydown', (e) => {
 });
 $$('[data-atajo]').forEach((b) =>
   b.addEventListener('click', () => {
-    if (b.dataset.atajo.startsWith('FIN') && !confirm('Se cerrará la negociación y el avatar entregará el informe. ¿Continuar?')) return;
+    if (b.dataset.atajo.startsWith('FIN') && !confirm('Se cerrará la negociación y la simulación entregará el informe. ¿Continuar?')) return;
     enviar(b.dataset.atajo);
   })
 );
