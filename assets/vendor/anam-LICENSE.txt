@@ -1,0 +1,12 @@
+@anam-ai/js-sdk
+Licencia: MIT
+https://github.com/anam-org/javascript-sdk
+
+Copia local de dist/umd/anam.js de la versión 4.25.0 del paquete npm
+@anam-ai/js-sdk, incluida en este repositorio para que la sala de
+negociación funcione también en redes corporativas o de aula que
+bloqueen CDNs externas (mismo criterio que assets/vendor/jspdf).
+
+Incluye además, empaquetadas por el propio bundle:
+- el módulo "buffer" de Node.js para navegador (MIT, Feross Aboukhadijeh)
+- "ieee754" (BSD-3-Clause, Feross Aboukhadijeh)

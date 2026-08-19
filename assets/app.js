@@ -17,6 +17,7 @@ const estado = {
   mensajes: [],
   ocupado: false,
   terminada: false,
+  avatar: { activo: false, cliente: null, silenciado: false },
 };
 
 const $ = (s, raiz = document) => raiz.querySelector(s);
@@ -93,12 +94,17 @@ function md(texto) {
 /* ─────────── Navegación ─────────── */
 
 function ir(vista) {
+  const activaAntes = $('.vista.activa');
+  const veniaDeSala = activaAntes && activaAntes.id === 'vista-sala';
   $$('.vista').forEach((v) => v.classList.toggle('activa', v.id === `vista-${vista}`));
   $$('nav.principal button').forEach((b) =>
     b.setAttribute('aria-current', String(b.dataset.ir === vista))
   );
   window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   if (vista === 'preparacion') { montarTablasPreparacion(); actualizarNotaPrep(); }
+  // El avatar cuesta por minuto conectado: si salimos de la sala por la
+  // navegación superior (no por "Salir"), lo cerramos igual que allí.
+  if (veniaDeSala && vista !== 'sala') pararAvatar();
 }
 
 function actualizarNotaPrep() {
@@ -266,6 +272,116 @@ $('#btn-empezar').addEventListener('click', async () => {
 const NOMBRE_COLOR = { rojo: 'Rojo', amarillo: 'Amarillo', verde: 'Verde', azul: 'Azul', oculto: 'Oculto' };
 const NOMBRE_DUREZA = { 1: '1 · Colaborativo', 2: '2 · Firme', 3: '3 · Implacable', 4: '4 · Hostil' };
 
+/* ─────────── Avatar (anam.ai) ───────────
+   El avatar solo pone cara y voz: quien negocia sigue siendo Claude, a
+   través de /api/chat como siempre. El texto ya generado se reenvía al
+   avatar con createTalkMessageStream(). Si algo falla en cualquier punto
+   (sin clave en el servidor, sin red, SDK no disponible…), la sala sigue
+   funcionando en modo texto sin que el participante pierda nada. */
+
+const FUENTES_ANAM_SDK = [
+  'assets/vendor/anam.umd.js',
+  'https://cdn.jsdelivr.net/npm/@anam-ai/js-sdk@4.25.0/dist/umd/anam.js',
+];
+let promesaAnamSDK = null;
+
+function cargarAnamSDK() {
+  if (window.anam && window.anam.createClient) return Promise.resolve(window.anam);
+  if (!promesaAnamSDK) {
+    promesaAnamSDK = (async () => {
+      let ultimo;
+      for (const src of FUENTES_ANAM_SDK) {
+        try {
+          await cargarGuion(src);
+          if (window.anam && window.anam.createClient) return window.anam;
+          ultimo = new Error('el SDK de anam.ai no se ha inicializado');
+        } catch (err) { ultimo = err; }
+      }
+      throw ultimo || new Error('no se ha podido cargar el SDK de anam.ai');
+    })().catch((err) => { promesaAnamSDK = null; throw err; });
+  }
+  return promesaAnamSDK;
+}
+
+function mostrarEstadoAvatar(texto) {
+  const caja = $('#avatar-caja');
+  const nota = $('#avatar-estado');
+  if (!caja || !nota) return;
+  if (texto) {
+    nota.textContent = texto;
+    nota.classList.remove('oculto');
+    caja.classList.remove('oculto');
+  } else {
+    nota.classList.add('oculto');
+  }
+}
+
+function ocultarAvatar() {
+  const caja = $('#avatar-caja');
+  if (caja) caja.classList.add('oculto');
+}
+
+async function pararAvatar() {
+  const av = estado.avatar;
+  if (av.cliente) {
+    try { await av.cliente.stopStreaming(); } catch {}
+  }
+  av.cliente = null;
+  av.activo = false;
+  ocultarAvatar();
+}
+
+async function iniciarAvatar() {
+  await pararAvatar();
+  if (!estado.caso || !estado.rolId) return;
+
+  mostrarEstadoAvatar('Conectando el avatar…');
+  const nombre = $('#avatar-nombre');
+  if (nombre) nombre.textContent = estado.briefing ? estado.briefing.contraparte.nombre : '—';
+
+  try {
+    const [anam, r] = await Promise.all([
+      cargarAnamSDK(),
+      fetch(`${API}/api/avatar-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ casoId: estado.caso.id, rolId: estado.rolId }),
+      }),
+    ]);
+
+    if (!r.ok) {
+      // El avatar es un añadido, no un requisito: si no está disponible,
+      // no interrumpimos la negociación por texto.
+      ocultarAvatar();
+      return;
+    }
+    const datos = await r.json();
+    if (!datos.sessionToken) { ocultarAvatar(); return; }
+
+    const cliente = anam.createClient(datos.sessionToken, { disableInputAudio: true });
+    estado.avatar.cliente = cliente;
+
+    cliente.addListener(anam.AnamEvent.SESSION_READY, () => mostrarEstadoAvatar(''));
+    cliente.addListener(anam.AnamEvent.CONNECTION_CLOSED, () => { estado.avatar.activo = false; });
+
+    await cliente.streamToVideoElement('avatar-video');
+    const video = $('#avatar-video');
+    if (video) video.muted = estado.avatar.silenciado;
+    estado.avatar.activo = true;
+  } catch (err) {
+    console.error('Avatar no disponible:', err);
+    await pararAvatar();
+  }
+}
+
+$('#avatar-mute').addEventListener('click', () => {
+  estado.avatar.silenciado = !estado.avatar.silenciado;
+  const video = $('#avatar-video');
+  if (video) video.muted = estado.avatar.silenciado;
+  $('#avatar-mute').textContent = estado.avatar.silenciado ? '🔇' : '🔊';
+  $('#avatar-mute').setAttribute('aria-pressed', String(estado.avatar.silenciado));
+});
+
 function entrarEnLaSala() {
   // Sin caso configurado no hay sala: mandamos a elegir uno.
   if (!estado.caso || !estado.briefing) {
@@ -274,8 +390,9 @@ function entrarEnLaSala() {
     ir('casos');
     return;
   }
-  // Si ya hay una negociación en curso, volvemos a ella sin reiniciarla.
-  if (estado.mensajes.length && !estado.terminada) { ir('sala'); return; }
+  // Si ya hay una negociación en curso, volvemos a ella sin reiniciarla
+  // (pero sí reconectamos el avatar, que se cierra al salir de la sala).
+  if (estado.mensajes.length && !estado.terminada) { ir('sala'); iniciarAvatar(); return; }
 
   estado.mensajes = [];
   estado.terminada = false;
@@ -289,6 +406,7 @@ function entrarEnLaSala() {
   $('#sala-recordatorio').innerHTML = md(estado.briefing.rol.briefing);
   $('#btn-tiempo-muerto').classList.toggle('oculto', estado.config.modo !== 'coach');
   ir('sala');
+  iniciarAvatar();
   hablarConSimulacion();
 }
 
@@ -299,8 +417,11 @@ $('#btn-salir').addEventListener('click', () => {
   if (estado.mensajes.length && !estado.terminada) {
     if (!confirm('Vas a salir de la negociación en curso. ¿Seguro?')) return;
   }
+  pararAvatar();
   ir('casos');
 });
+
+window.addEventListener('beforeunload', () => { pararAvatar(); });
 
 function turno(tipo, texto, quien) {
   const div = document.createElement('div');
@@ -361,6 +482,35 @@ async function hablarConSimulacion() {
     let resto = '';
     caja.textContent = '';
 
+    // El texto se reenvía al avatar a medida que llega, salvo que resulte
+    // ser el informe final: eso se lee en pantalla pero el avatar (que
+    // representa a la contraparte, en personaje) no lo dice en voz alta.
+    // Como no sabemos si es informe hasta ver las primeras líneas, las
+    // primeras palabras se retienen en un pequeño búfer antes de decidir.
+    const avatarDisponible = estado.avatar.activo && estado.avatar.cliente;
+    let bufer = '';
+    let decidido = false;
+    let esModoInforme = false;
+    let flujoAvatar = null;
+
+    const enviarAlAvatar = (texto, esUltimo = false) => {
+      if (!avatarDisponible || esModoInforme || !flujoAvatar) return;
+      try {
+        if (flujoAvatar.isActive()) flujoAvatar.streamMessageChunk(texto, esUltimo);
+      } catch (err) { console.error('Avatar (talkStream):', err); }
+    };
+
+    const decidirAvatar = (forzar = false) => {
+      if (decidido) return;
+      if (esInforme(bufer)) { esModoInforme = true; decidido = true; return; }
+      if (!forzar && bufer.length < 24 && !bufer.includes('\n\n')) return;
+      decidido = true;
+      if (avatarDisponible) {
+        try { flujoAvatar = estado.avatar.cliente.createTalkMessageStream(); } catch { flujoAvatar = null; }
+        enviarAlAvatar(bufer);
+      }
+    };
+
     while (true) {
       const { done, value } = await lector.read();
       if (done) break;
@@ -375,13 +525,21 @@ async function hablarConSimulacion() {
           try {
             const ev = JSON.parse(cuerpo);
             if (ev.type === 'content_block_delta' && ev.delta && ev.delta.text) {
-              acumulado += ev.delta.text;
+              const texto = ev.delta.text;
+              acumulado += texto;
               caja.textContent = acumulado;
               $('#conversacion').scrollTop = $('#conversacion').scrollHeight;
+              if (!decidido) { bufer += texto; decidirAvatar(); }
+              else enviarAlAvatar(texto);
             }
           } catch {}
         }
       }
+    }
+
+    if (!decidido) decidirAvatar(true);
+    if (flujoAvatar) {
+      try { if (flujoAvatar.isActive()) await flujoAvatar.endMessage(); } catch {}
     }
 
     if (!acumulado) {
