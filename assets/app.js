@@ -12,11 +12,17 @@ const estado = {
   filtro: 'todos',
   caso: null,
   rolId: null,
-  config: { modo: 'evaluador', dureza: 2, color: 'oculto' },
+  // El perfil conductual ya no se elige en la web (ver 04-despliegue-web.md /
+  // bitácora): la simulación juega siempre "rojo · impulsor".
+  config: { modo: 'evaluador', dureza: 2, color: 'rojo' },
   briefing: null,
   mensajes: [],
   ocupado: false,
   terminada: false,
+  // Identifican a qué caso y rol pertenece la negociación en curso (estado.mensajes),
+  // para no reanudar por error una sesión de un caso/rol distinto al recién elegido.
+  sesionCasoId: null,
+  sesionRolId: null,
   avatar: { activo: false, cliente: null, silenciado: false },
 };
 
@@ -93,7 +99,16 @@ function md(texto) {
 
 /* ─────────── Navegación ─────────── */
 
-function ir(vista) {
+const VISTAS_VALIDAS = ['inicio', 'casos', 'configurar', 'briefing', 'sala', 'preparacion', 'marco'];
+
+/* Cada vista queda registrada en el historial del navegador (con
+   history.pushState) para que la flecha "atrás" del navegador vuelva a la
+   vista anterior de la propia web (p. ej. de la sala al briefing) en vez de
+   sacar al usuario de la página o dejarle una pantalla en blanco. */
+function ir(vista, opciones = {}) {
+  const { registrarHistorial = true } = opciones;
+  if (!VISTAS_VALIDAS.includes(vista)) vista = 'inicio';
+
   const activaAntes = $('.vista.activa');
   const veniaDeSala = activaAntes && activaAntes.id === 'vista-sala';
   $$('.vista').forEach((v) => v.classList.toggle('activa', v.id === `vista-${vista}`));
@@ -105,7 +120,29 @@ function ir(vista) {
   // El avatar cuesta por minuto conectado: si salimos de la sala por la
   // navegación superior (no por "Salir"), lo cerramos igual que allí.
   if (veniaDeSala && vista !== 'sala') pararAvatar();
+
+  if (registrarHistorial) {
+    if (history.state && history.state.vista === vista) {
+      history.replaceState({ vista }, '', '#' + vista);
+    } else {
+      history.pushState({ vista }, '', '#' + vista);
+    }
+  }
 }
+
+/* Al pulsar "atrás"/"adelante", el navegador nos dice a qué vista volver.
+   Si esa vista necesita datos que ya no están (por ejemplo "sala" sin
+   ningún caso elegido en esta carga de página), no puede reconstruirse:
+   en ese caso llevamos a la biblioteca de casos en vez de a una vista rota. */
+window.addEventListener('popstate', (e) => {
+  let vista = (e.state && e.state.vista) || 'inicio';
+  const necesitaCaso = ['configurar', 'briefing', 'sala'].includes(vista);
+  const necesitaBriefing = ['briefing', 'sala'].includes(vista);
+  if ((necesitaCaso && !estado.caso) || (necesitaBriefing && !estado.briefing)) {
+    vista = 'casos';
+  }
+  ir(vista, { registrarHistorial: false });
+});
 
 function actualizarNotaPrep() {
   const nota = document.getElementById('nota-prep');
@@ -390,12 +427,22 @@ function entrarEnLaSala() {
     ir('casos');
     return;
   }
-  // Si ya hay una negociación en curso, volvemos a ella sin reiniciarla
-  // (pero sí reconectamos el avatar, que se cierra al salir de la sala).
-  if (estado.mensajes.length && !estado.terminada) { ir('sala'); iniciarAvatar(); return; }
+  // Si ya hay una negociación en curso PARA ESTE MISMO CASO Y ROL, volvemos
+  // a ella sin reiniciarla (pero sí reconectamos el avatar, que se cierra al
+  // salir de la sala). Si el caso o el rol han cambiado desde la última vez
+  // -aunque queden mensajes sin cerrar-, es una negociación nueva: no hay
+  // que arrastrar el papel ni la conversación de la anterior.
+  const esLaMismaSesion =
+    estado.mensajes.length &&
+    !estado.terminada &&
+    estado.sesionCasoId === estado.caso.id &&
+    estado.sesionRolId === estado.rolId;
+  if (esLaMismaSesion) { ir('sala'); iniciarAvatar(); return; }
 
   estado.mensajes = [];
   estado.terminada = false;
+  estado.sesionCasoId = estado.caso.id;
+  estado.sesionRolId = estado.rolId;
   $('#conversacion').innerHTML = '';
   $('#sala-caso').textContent = estado.caso.titulo;
   $('#sala-yo').textContent = estado.briefing.rol.nombre;
@@ -441,6 +488,8 @@ async function hablarConSimulacion() {
   if (estado.ocupado) return;
   estado.ocupado = true;
   $('#btn-enviar').disabled = true;
+  const btnMic = $('#btn-microfono');
+  if (btnMic) btnMic.disabled = true;
 
   const contenedor = turno('simulacion', '', estado.briefing.contraparte.nombre);
   const caja = contenedor.querySelector('.texto');
@@ -493,8 +542,28 @@ async function hablarConSimulacion() {
     let esModoInforme = false;
     let flujoAvatar = null;
 
+    // El texto de la simulación puede traer acotaciones de lenguaje no
+    // verbal entre corchetes, p. ej. "[se echa hacia atrás]" o
+    // "[entra en la sala y se sienta]" (ver prompt.js). Eso se queda en la
+    // pantalla (el participante las lee como contexto), pero NO se le pasa
+    // al avatar de voz: si se las mandamos, las lee en voz alta como si
+    // fueran diálogo. El filtro es un pequeño autómata con memoria entre
+    // trozos del streaming, porque un corchete puede partirse entre dos
+    // fragmentos de texto que llegan por separado.
+    let dentroDeCorchete = false;
+    const filtrarParaAvatar = (fragmento) => {
+      let salida = '';
+      for (const ch of fragmento) {
+        if (ch === '[') { dentroDeCorchete = true; continue; }
+        if (ch === ']') { dentroDeCorchete = false; continue; }
+        if (!dentroDeCorchete) salida += ch;
+      }
+      return salida;
+    };
+
     const enviarAlAvatar = (texto, esUltimo = false) => {
       if (!avatarDisponible || esModoInforme || !flujoAvatar) return;
+      if (!texto && !esUltimo) return;
       try {
         if (flujoAvatar.isActive()) flujoAvatar.streamMessageChunk(texto, esUltimo);
       } catch (err) { console.error('Avatar (talkStream):', err); }
@@ -529,8 +598,11 @@ async function hablarConSimulacion() {
               acumulado += texto;
               caja.textContent = acumulado;
               $('#conversacion').scrollTop = $('#conversacion').scrollHeight;
-              if (!decidido) { bufer += texto; decidirAvatar(); }
-              else enviarAlAvatar(texto);
+              // El texto completo (con corchetes) se muestra en pantalla;
+              // al avatar solo le llega la versión filtrada.
+              const textoParaAvatar = filtrarParaAvatar(texto);
+              if (!decidido) { bufer += textoParaAvatar; decidirAvatar(); }
+              else enviarAlAvatar(textoParaAvatar);
             }
           } catch {}
         }
@@ -554,6 +626,32 @@ async function hablarConSimulacion() {
       contenedor.querySelector('.quien').textContent = 'Informe de la simulación';
       caja.innerHTML = md(acumulado);
       estado.terminada = true;
+
+      const barraInforme = document.createElement('div');
+      barraInforme.className = 'barra-accion';
+      barraInforme.style.marginTop = '14px';
+      const btnDescargarInforme = document.createElement('button');
+      btnDescargarInforme.type = 'button';
+      btnDescargarInforme.className = 'boton secundario';
+      btnDescargarInforme.textContent = 'Descargar informe en PDF';
+      btnDescargarInforme.addEventListener('click', async () => {
+        const etiqueta = btnDescargarInforme.textContent;
+        btnDescargarInforme.disabled = true;
+        btnDescargarInforme.textContent = 'Generando el PDF…';
+        try {
+          await descargarInformePdf(acumulado);
+        } catch (err) {
+          console.error(err);
+          alert('No se ha podido generar el PDF (' + (err.message || err) + '). Te descargo el informe en texto.');
+          descargarInformeMarkdown(acumulado);
+        } finally {
+          btnDescargarInforme.disabled = false;
+          btnDescargarInforme.textContent = etiqueta;
+        }
+      });
+      barraInforme.appendChild(btnDescargarInforme);
+      contenedor.appendChild(barraInforme);
+
       turno('sistema', 'Simulación cerrada. Puedes repetir el caso con otra configuración desde la biblioteca.', '');
     }
   } catch (err) {
@@ -562,6 +660,7 @@ async function hablarConSimulacion() {
     clearTimeout(avisoLento);
     estado.ocupado = false;
     $('#btn-enviar').disabled = false;
+    if (btnMic) btnMic.disabled = false;
     $('#sala-turnos').textContent = String(estado.mensajes.filter((m) => m.role === 'user').length);
   }
 }
@@ -589,6 +688,90 @@ $$('[data-atajo]').forEach((b) =>
     enviar(b.dataset.atajo);
   })
 );
+
+/* ─────────── Dictado por voz ───────────
+   Alternativa al teclado para dar instrucciones a la simulación: usa el
+   reconocimiento de voz del propio navegador (Web Speech API). No hay
+   servidor de por medio ni se envía audio a ningún sitio. Donde el
+   navegador no lo soporte (Firefox de escritorio, la mayoría de Safari
+   antiguos…) el botón se queda oculto y todo sigue funcionando por texto,
+   igual que con el avatar o el PDF. */
+
+const MotorDictado = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+
+function inicializarDictado() {
+  const btn = $('#btn-microfono');
+  if (!btn) return;
+  if (!MotorDictado) return; // se queda oculto (clase "oculto" ya puesta en el HTML)
+
+  btn.classList.remove('oculto');
+
+  let reconocimiento = null;
+  let escuchando = false;
+
+  const marcarReposo = () => {
+    escuchando = false;
+    btn.classList.remove('grabando');
+    btn.setAttribute('aria-pressed', 'false');
+    btn.textContent = '🎤';
+    btn.title = 'Dictar por voz';
+  };
+
+  const marcarEscuchando = () => {
+    escuchando = true;
+    btn.classList.add('grabando');
+    btn.setAttribute('aria-pressed', 'true');
+    btn.textContent = '⏹';
+    btn.title = 'Detener el dictado';
+  };
+
+  btn.addEventListener('click', () => {
+    if (escuchando) {
+      if (reconocimiento) reconocimiento.stop();
+      return;
+    }
+    if (estado.ocupado) return;
+
+    reconocimiento = new MotorDictado();
+    reconocimiento.lang = 'es-ES';
+    reconocimiento.interimResults = false;
+    reconocimiento.maxAlternatives = 1;
+
+    reconocimiento.addEventListener('start', marcarEscuchando);
+    reconocimiento.addEventListener('end', marcarReposo);
+
+    reconocimiento.addEventListener('result', (e) => {
+      const texto = Array.from(e.results)
+        .map((r) => r[0].transcript)
+        .join(' ')
+        .trim();
+      if (!texto) return;
+      const entrada = $('#entrada');
+      entrada.value = entrada.value.trim() ? `${entrada.value.trim()} ${texto}` : texto;
+      entrada.focus();
+      entrada.scrollTop = entrada.scrollHeight;
+    });
+
+    reconocimiento.addEventListener('error', (e) => {
+      console.error('Dictado por voz:', e.error);
+      marcarReposo();
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        alert('No se ha podido acceder al micrófono. Revisa los permisos del navegador para este sitio.');
+      } else if (e.error === 'no-speech') {
+        // Nada que avisar: el participante simplemente no ha dicho nada.
+      }
+    });
+
+    try {
+      reconocimiento.start();
+    } catch (err) {
+      console.error('Dictado por voz:', err);
+      marcarReposo();
+    }
+  });
+}
+
+inicializarDictado();
 
 /* ─────────── Hoja de preparación ─────────── */
 
@@ -736,116 +919,111 @@ function variablesPrep() {
   return datos.variables && datos.variables.length ? datos.variables : ['', '', '', '', ''];
 }
 
-async function descargarHojaPdf() {
-  const JsPDF = await cargarJsPDF();
-  const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: true });
-
+/* Fábrica de ayudas de dibujo para un documento jsPDF con la estética de la
+   web (fondo oscuro, acento, tablas). Se comparte entre la hoja de
+   preparación y el informe final de la negociación, para que ambos
+   documentos salgan con el mismo aspecto. */
+function crearConstructorPdf(doc) {
   const ANCHO_PAG = 210, ALTO_PAG = 297, M = 16;
   const ancho = ANCHO_PAG - M * 2;
   const LIMITE = ALTO_PAG - 20;
-  let y = 0, pagina = 1;
+  const pos = { y: 0, pagina: 1 };
 
   const fondo = () => { doc.setFillColor(...COLOR_PDF.fondo); doc.rect(0, 0, ANCHO_PAG, ALTO_PAG, 'F'); };
   const pie = () => {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...COLOR_PDF.tenue);
     doc.text('Negociador Implacable · simulador docente de negociación', M, ALTO_PAG - 10);
-    doc.text(String(pagina), ANCHO_PAG - M, ALTO_PAG - 10, { align: 'right' });
+    doc.text(String(pos.pagina), ANCHO_PAG - M, ALTO_PAG - 10, { align: 'right' });
   };
-  const saltarPagina = () => { pie(); doc.addPage(); pagina++; fondo(); y = M + 8; };
-  const espacio = (alto) => { if (y + alto > LIMITE) saltarPagina(); };
+  const saltarPagina = () => { pie(); doc.addPage(); pos.pagina++; fondo(); pos.y = M + 8; };
+  const espacio = (alto) => { if (pos.y + alto > LIMITE) saltarPagina(); };
 
-  fondo();
-  y = M + 6;
+  const cabecera = (tituloDoc, filasMeta) => {
+    fondo();
+    pos.y = M + 6;
+    doc.setFillColor(...COLOR_PDF.acento);
+    doc.circle(M + 1.6, pos.y - 1.4, 1.5, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...COLOR_PDF.acento);
+    doc.text('NEGOCIADOR IMPLACABLE', M + 5.6, pos.y);
+    pos.y += 10;
+    doc.setFontSize(19); doc.setTextColor(...COLOR_PDF.texto);
+    doc.text(tituloDoc, M, pos.y);
+    pos.y += 8;
 
-  /* ── Cabecera ── */
-  doc.setFillColor(...COLOR_PDF.acento);
-  doc.circle(M + 1.6, y - 1.4, 1.5, 'F');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...COLOR_PDF.acento);
-  doc.text('NEGOCIADOR IMPLACABLE', M + 5.6, y);
-  y += 10;
-  doc.setFontSize(19); doc.setTextColor(...COLOR_PDF.texto);
-  doc.text('Hoja de preparación', M, y);
-  y += 8;
+    const altoMeta = filasMeta.length * 6 + 6;
+    doc.setFillColor(...COLOR_PDF.fondo2);
+    doc.setDrawColor(...COLOR_PDF.borde); doc.setLineWidth(0.2);
+    doc.roundedRect(M, pos.y - 1, ancho, altoMeta, 2, 2, 'FD');
+    pos.y += 4;
+    filasMeta.forEach(([etiqueta, valor], i) => {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      doc.setTextColor(...COLOR_PDF.tenue);
+      doc.text(etiqueta, M + 4, pos.y);
+      const vacio = !valor;
+      doc.setFont('helvetica', vacio ? 'normal' : 'bold');
+      doc.setTextColor(...(vacio ? COLOR_PDF.tenue : COLOR_PDF.texto));
+      doc.text(vacio ? SIN_RESPUESTA : valor, ANCHO_PAG - M - 4, pos.y, { align: 'right' });
+      if (i < filasMeta.length - 1) {
+        doc.setDrawColor(...COLOR_PDF.borde);
+        doc.line(M + 4, pos.y + 1.8, ANCHO_PAG - M - 4, pos.y + 1.8);
+      }
+      pos.y += 6;
+    });
+    pos.y += 8;
+  };
 
-  const meta = [
-    ['Caso', estado.caso ? estado.caso.titulo : ''],
-    ['Mi papel', estado.briefing ? estado.briefing.rol.nombre : ''],
-    ['Fecha', new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })],
-  ];
-  const altoMeta = meta.length * 6 + 6;
-  doc.setFillColor(...COLOR_PDF.fondo2);
-  doc.setDrawColor(...COLOR_PDF.borde); doc.setLineWidth(0.2);
-  doc.roundedRect(M, y - 1, ancho, altoMeta, 2, 2, 'FD');
-  y += 4;
-  meta.forEach(([etiqueta, valor], i) => {
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-    doc.setTextColor(...COLOR_PDF.tenue);
-    doc.text(etiqueta, M + 4, y);
-    const vacio = !valor;
-    doc.setFont('helvetica', vacio ? 'normal' : 'bold');
-    doc.setTextColor(...(vacio ? COLOR_PDF.tenue : COLOR_PDF.texto));
-    doc.text(vacio ? SIN_RESPUESTA : valor, ANCHO_PAG - M - 4, y, { align: 'right' });
-    if (i < meta.length - 1) {
-      doc.setDrawColor(...COLOR_PDF.borde);
-      doc.line(M + 4, y + 1.8, ANCHO_PAG - M - 4, y + 1.8);
-    }
-    y += 6;
-  });
-  y += 8;
-
-  /* ── Ayudas de dibujo ── */
   const seccion = (numero, titulo, sub) => {
     espacio(20);
     doc.setFillColor(...COLOR_PDF.acento);
-    doc.rect(M, y - 4, 1.8, 5.4, 'F');
+    doc.rect(M, pos.y - 4, 1.8, 5.4, 'F');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.setTextColor(...COLOR_PDF.texto);
-    const t = `${numero} · ${titulo}`;
-    doc.text(t, M + 5, y);
+    const t = numero ? `${numero} · ${titulo}` : titulo;
+    doc.text(t, M + 5, pos.y);
     if (sub) {
       const w = doc.getTextWidth(t);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
       doc.setTextColor(...COLOR_PDF.tenue);
-      doc.text(sub, M + 5 + w + 3, y);
+      doc.text(sub, M + 5 + w + 3, pos.y);
     }
-    y += 7;
+    pos.y += 7;
   };
 
   const tabla = (cabeceras, filas, anchos) => {
     const alto = 7;
-    const cabecera = () => {
+    const dibujarCabecera = () => {
       espacio(alto + 8);
       doc.setFillColor(...COLOR_PDF.superficie);
       doc.setDrawColor(...COLOR_PDF.borde); doc.setLineWidth(0.2);
-      doc.rect(M, y - 4.4, ancho, alto, 'FD');
+      doc.rect(M, pos.y - 4.4, ancho, alto, 'FD');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...COLOR_PDF.tenue);
       let x = M;
       cabeceras.forEach((c, i) => {
-        if (i) doc.line(x, y - 4.4, x, y - 4.4 + alto);
-        doc.text(String(c).toUpperCase(), x + 2, y);
+        if (i) doc.line(x, pos.y - 4.4, x, pos.y - 4.4 + alto);
+        doc.text(String(c).toUpperCase(), x + 2, pos.y);
         x += anchos[i];
       });
-      y += alto;
+      pos.y += alto;
     };
-    cabecera();
+    dibujarCabecera();
     filas.forEach((fila) => {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
       const celdas = fila.map((t, i) => doc.splitTextToSize(String(t), anchos[i] - 4));
       const nLineas = celdas.reduce((m, c) => Math.max(m, c.length), 1);
       const altoFila = Math.max(alto, nLineas * 4 + 3);
-      if (y - 4.4 + altoFila > LIMITE) { saltarPagina(); cabecera(); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); }
+      if (pos.y - 4.4 + altoFila > LIMITE) { saltarPagina(); dibujarCabecera(); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); }
       doc.setFillColor(...COLOR_PDF.fondo2);
       doc.setDrawColor(...COLOR_PDF.borde); doc.setLineWidth(0.2);
-      doc.rect(M, y - 4.4, ancho, altoFila, 'FD');
+      doc.rect(M, pos.y - 4.4, ancho, altoFila, 'FD');
       let x = M;
       celdas.forEach((lineas, i) => {
-        if (i) doc.line(x, y - 4.4, x, y - 4.4 + altoFila);
+        if (i) doc.line(x, pos.y - 4.4, x, pos.y - 4.4 + altoFila);
         doc.setTextColor(...(fila[i] === SIN_RESPUESTA ? COLOR_PDF.tenue : COLOR_PDF.texto));
-        lineas.forEach((l, j) => doc.text(l, x + 2, y + j * 4));
+        lineas.forEach((l, j) => doc.text(l, x + 2, pos.y + j * 4));
         x += anchos[i];
       });
-      y += altoFila;
+      pos.y += altoFila;
     });
-    y += 8;
+    pos.y += 8;
   };
 
   const campo = (etiqueta, valor) => {
@@ -855,25 +1033,71 @@ async function descargarHojaPdf() {
     const lineas = doc.splitTextToSize(texto, ancho - 8);
     espacio(6 + lineas.length * 5 + 4);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...COLOR_PDF.tenue);
-    doc.text(etiqueta.toUpperCase(), M, y);
-    y += 5;
-    const arriba = y - 3.4;
+    doc.text(etiqueta.toUpperCase(), M, pos.y);
+    pos.y += 5;
+    const arriba = pos.y - 3.4;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
     doc.setTextColor(...(vacio ? COLOR_PDF.tenue : COLOR_PDF.texto));
-    lineas.forEach((l) => { doc.text(l, M + 4, y); y += 5; });
+    lineas.forEach((l) => { doc.text(l, M + 4, pos.y); pos.y += 5; });
     doc.setDrawColor(...(vacio ? COLOR_PDF.borde : COLOR_PDF.acento));
     doc.setLineWidth(0.6);
-    doc.line(M + 0.6, arriba, M + 0.6, y - 4.4);
+    doc.line(M + 0.6, arriba, M + 0.6, pos.y - 4.4);
     doc.setLineWidth(0.2);
-    y += 5;
+    pos.y += 5;
   };
 
-  /* ── Contenido ── */
+  // Quita el marcado de énfasis de markdown (**negrita**, `código`) para
+  // dibujar texto plano: jsPDF no compone estilos distintos dentro de una
+  // misma línea sin trabajo extra, así que aquí se prioriza que el informe
+  // sea legible y fiel al contenido antes que reproducir la negrita.
+  const limpiarEnfasis = (t) =>
+    String(t).replace(/\*\*(.+?)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').trim();
+
+  const parrafo = (texto) => {
+    const limpio = limpiarEnfasis(texto);
+    if (!limpio) return;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...COLOR_PDF.texto);
+    const lineas = doc.splitTextToSize(limpio, ancho);
+    espacio(lineas.length * 5 + 4);
+    lineas.forEach((l) => { doc.text(l, M, pos.y); pos.y += 5; });
+    pos.y += 3;
+  };
+
+  const lista = (items, ordenada) => {
+    items.forEach((item, i) => {
+      const marcador = ordenada ? `${i + 1}.` : '•';
+      const limpio = limpiarEnfasis(item);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+      const lineas = doc.splitTextToSize(limpio, ancho - 8);
+      espacio(lineas.length * 5 + 2);
+      doc.setTextColor(...COLOR_PDF.acento);
+      doc.text(marcador, M, pos.y);
+      doc.setTextColor(...COLOR_PDF.texto);
+      lineas.forEach((l, j) => doc.text(l, M + 7, pos.y + j * 5));
+      pos.y += lineas.length * 5 + 2;
+    });
+    pos.y += 3;
+  };
+
+  return { doc, pos, M, ancho, fondo, pie, saltarPagina, espacio, cabecera, seccion, tabla, campo, parrafo, lista, limpiarEnfasis };
+}
+
+async function descargarHojaPdf() {
+  const JsPDF = await cargarJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: true });
+  const pdf = crearConstructorPdf(doc);
+
+  pdf.cabecera('Hoja de preparación', [
+    ['Caso', estado.caso ? estado.caso.titulo : ''],
+    ['Mi papel', estado.briefing ? estado.briefing.rol.nombre : ''],
+    ['Fecha', new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })],
+  ]);
+
   const variables = variablesPrep();
   const oNo = (s) => (s ? s : SIN_RESPUESTA);
 
-  seccion('1', 'Mis objetivos por variable', 'óptimo, satisfactorio, mínimo');
-  tabla(
+  pdf.seccion('1', 'Mis objetivos por variable', 'óptimo, satisfactorio, mínimo');
+  pdf.tabla(
     ['Variable', 'Óptimo', 'Satisfactorio', 'Mínimo'],
     variables.map((_, i) => [
       oNo(valorPrep(`obj-${i}-var`)),
@@ -884,8 +1108,8 @@ async function descargarHojaPdf() {
     [46, 44, 44, 44]
   );
 
-  seccion('2', 'Coste e importancia', 'el mapa del toma y daca');
-  tabla(
+  pdf.seccion('2', 'Coste e importancia', 'el mapa del toma y daca');
+  pdf.tabla(
     ['Variable', 'Me cuesta', 'Me importa', 'Les cuesta', 'Les importa'],
     variables.map((_, i) => [
       oNo(valorPrep(`var-${i}-nom`)),
@@ -897,30 +1121,120 @@ async function descargarHojaPdf() {
     [50, 32, 32, 32, 32]
   );
 
-  seccion('3', 'MAAN', 'mi alternativa y la suya');
-  campo('Mi mejor alternativa si no hay acuerdo', valorPrep('p-maan-mio'));
-  campo('Su alternativa probable', valorPrep('p-maan-suyo'));
+  pdf.seccion('3', 'MAAN', 'mi alternativa y la suya');
+  pdf.campo('Mi mejor alternativa si no hay acuerdo', valorPrep('p-maan-mio'));
+  pdf.campo('Su alternativa probable', valorPrep('p-maan-suyo'));
 
-  seccion('4', 'Posición, intereses, necesidad');
-  campo('Lo que dirán que quieren', valorPrep('p-posicion'));
-  campo('Lo que probablemente les mueve', valorPrep('p-intereses'));
-  campo('Lo que de verdad necesitan', valorPrep('p-necesidad'));
+  pdf.seccion('4', 'Posición, intereses, necesidad');
+  pdf.campo('Lo que dirán que quieren', valorPrep('p-posicion'));
+  pdf.campo('Lo que probablemente les mueve', valorPrep('p-intereses'));
+  pdf.campo('Lo que de verdad necesitan', valorPrep('p-necesidad'));
 
-  seccion('5', 'Mis preguntas', 'por escrito, como manda el marco');
-  campo('Para averiguar', valorPrep('p-preg-averiguar'));
-  campo('Para comprender', valorPrep('p-preg-comprender'));
-  campo('Para construir', valorPrep('p-preg-construir'));
-  campo('Para concretar', valorPrep('p-preg-concretar'));
-  campo('La pregunta más difícil que me pueden hacer, y mi respuesta', valorPrep('p-preg-dificil'));
+  pdf.seccion('5', 'Mis preguntas', 'por escrito, como manda el marco');
+  pdf.campo('Para averiguar', valorPrep('p-preg-averiguar'));
+  pdf.campo('Para comprender', valorPrep('p-preg-comprender'));
+  pdf.campo('Para construir', valorPrep('p-preg-construir'));
+  pdf.campo('Para concretar', valorPrep('p-preg-concretar'));
+  pdf.campo('La pregunta más difícil que me pueden hacer, y mi respuesta', valorPrep('p-preg-dificil'));
 
-  seccion('6', 'Mi apertura', 'y los tres primeros movimientos');
-  campo('Oferta inicial', valorPrep('p-apertura'));
-  campo('Movimiento 2', valorPrep('p-mov2'));
-  campo('Movimiento 3', valorPrep('p-mov3'));
-  campo('Tácticas que espero y mi respuesta', valorPrep('p-tacticas'));
+  pdf.seccion('6', 'Mi apertura', 'y los tres primeros movimientos');
+  pdf.campo('Oferta inicial', valorPrep('p-apertura'));
+  pdf.campo('Movimiento 2', valorPrep('p-mov2'));
+  pdf.campo('Movimiento 3', valorPrep('p-mov3'));
+  pdf.campo('Tácticas que espero y mi respuesta', valorPrep('p-tacticas'));
 
-  pie();
+  pdf.pie();
   doc.save('hoja-preparacion-negociacion.pdf');
+}
+
+/* ── Descarga del informe final en PDF ───
+   Mismo aspecto que la hoja de preparación (misma fábrica de ayudas de
+   dibujo, arriba). El informe es el markdown que ya ha entregado la
+   simulación siguiendo la estructura fija de prompt.js (## Resultado,
+   ## Puntuación, tablas, listas…), así que se recorre línea a línea igual
+   que hace md() para la pantalla, pero dibujando con jsPDF en vez de HTML. */
+function renderizarInformeEnPdf(pdf, texto) {
+  const lineas = (texto || '').split('\n');
+  let i = 0;
+  let listaAcumulada = null;
+
+  const cerrarLista = () => {
+    if (listaAcumulada) { pdf.lista(listaAcumulada.items, listaAcumulada.ordenada); listaAcumulada = null; }
+  };
+  const esFilaTabla = (l) => /^\s*\|/.test(l || '');
+  const esSeparadorTabla = (l) => /^\s*\|[\s:|-]+\|\s*$/.test(l || '');
+  const celdasDeFila = (fila) =>
+    fila.trim().replace(/^\||\|$/g, '').split('|').map((c) => pdf.limpiarEnfasis(c.trim()));
+
+  while (i < lineas.length) {
+    const l = lineas[i];
+    let m;
+
+    if (esFilaTabla(l) && esSeparadorTabla(lineas[i + 1])) {
+      cerrarLista();
+      const cab = celdasDeFila(l);
+      i += 2;
+      const filas = [];
+      while (i < lineas.length && esFilaTabla(lineas[i])) { filas.push(celdasDeFila(lineas[i])); i++; }
+      const anchoCol = pdf.ancho / cab.length;
+      pdf.tabla(cab, filas, cab.map(() => anchoCol));
+      continue;
+    }
+
+    if ((m = l.match(/^(#{1,4})\s+(.*)$/))) {
+      cerrarLista();
+      pdf.seccion(null, pdf.limpiarEnfasis(m[2]));
+      i++; continue;
+    }
+
+    if ((m = l.match(/^\s*[-*]\s+(.*)$/))) {
+      if (!listaAcumulada || listaAcumulada.ordenada) { cerrarLista(); listaAcumulada = { items: [], ordenada: false }; }
+      listaAcumulada.items.push(m[1]);
+      i++; continue;
+    }
+
+    if ((m = l.match(/^\s*\d+[.)]\s+(.*)$/))) {
+      if (!listaAcumulada || !listaAcumulada.ordenada) { cerrarLista(); listaAcumulada = { items: [], ordenada: true }; }
+      listaAcumulada.items.push(m[1]);
+      i++; continue;
+    }
+
+    if (l.trim() === '') { cerrarLista(); i++; continue; }
+
+    cerrarLista();
+    pdf.parrafo(l);
+    i++;
+  }
+  cerrarLista();
+}
+
+async function descargarInformePdf(textoInforme) {
+  const JsPDF = await cargarJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: true });
+  const pdf = crearConstructorPdf(doc);
+
+  pdf.cabecera('Informe de la negociación', [
+    ['Caso', estado.caso ? estado.caso.titulo : ''],
+    ['Mi papel', estado.briefing ? estado.briefing.rol.nombre : ''],
+    ['Simulación', estado.briefing ? estado.briefing.contraparte.nombre : ''],
+    ['Fecha', new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })],
+  ]);
+
+  renderizarInformeEnPdf(pdf, textoInforme);
+
+  pdf.pie();
+  doc.save('informe-negociacion.pdf');
+}
+
+/* Igual que con la hoja de preparación: si el PDF no se puede generar (sin
+   red, CDN bloqueada…), se descarga el mismo informe en texto para no
+   dejar al participante sin nada. */
+function descargarInformeMarkdown(textoInforme) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([textoInforme || ''], { type: 'text/markdown;charset=utf-8' }));
+  a.download = 'informe-negociacion.md';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 /* Si el PDF no se puede generar (sin red, CDN bloqueada), se descarga
@@ -974,6 +1288,10 @@ $('#btn-descargar-prep').addEventListener('click', async () => {
 });
 
 /* ─────────── Arranque ─────────── */
+
+// Deja un primer registro en el historial para que la flecha "atrás" tenga
+// a dónde volver desde el principio (ver ir()/popstate más arriba).
+history.replaceState({ vista: 'inicio' }, '', '#inicio');
 
 if (!API || API.includes('PON-AQUI')) {
   document.body.insertAdjacentHTML(
