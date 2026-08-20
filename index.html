@@ -54,7 +54,7 @@
       <div class="paso">
         <div class="num">2</div>
         <h3>Configura la simulación</h3>
-        <p>Contraparte, evaluador o coach. Cuatro niveles de dureza y cuatro perfiles conductuales.</p>
+        <p>Contraparte, evaluador o coach. Cuatro niveles de dureza.</p>
       </div>
       <div class="paso">
         <div class="num">3</div>
@@ -133,7 +133,10 @@
       </div>
     </div>
 
-    <div class="bloque">
+    <!-- El perfil conductual ya no se elige: la simulación usa siempre
+         "Rojo · impulsor" (ver estado.config.color en app.js). Se deja el
+         bloque en el HTML, oculto, por si se quiere reactivar más adelante. -->
+    <div class="bloque oculto" id="bloque-color">
       <h3>Perfil conductual de la simulación</h3>
       <p class="ayuda">Cada perfil exige una forma distinta de tratarlo. «Oculto» es el mejor ejercicio: deberás identificarlo tú.</p>
       <div class="opciones" id="opciones-color">
@@ -215,6 +218,7 @@
         <div class="compositor">
           <div class="fila">
             <textarea id="entrada" placeholder="Escribe tu intervención… (Enter para enviar, Mayús+Enter para salto de línea)" rows="2"></textarea>
+            <button class="boton fantasma oculto" id="btn-microfono" type="button" aria-pressed="false" title="Dictar por voz">🎤</button>
             <button class="boton" id="btn-enviar">Enviar</button>
           </div>
           <div class="acciones-sala">
