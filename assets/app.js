@@ -24,6 +24,14 @@ const estado = {
   sesionCasoId: null,
   sesionRolId: null,
   avatar: { activo: false, cliente: null, silenciado: false },
+  // Firma del historial que devuelve el servidor tras cada intervención de la
+  // simulación (ver negociador-api/src/firma.js). Sin ella no se puede puntuar.
+  firma: null,
+  // Competición: si el servidor la tiene activa, si esta negociación puntúa,
+  // y si la negociación en curso se empezó compitiendo.
+  competicion: { disponible: false, reglas: null, puntua: true },
+  sesionCompite: false,
+  evaluando: false,
 };
 
 const $ = (s, raiz = document) => raiz.querySelector(s);
@@ -99,7 +107,13 @@ function md(texto) {
 
 /* ─────────── Navegación ─────────── */
 
-const VISTAS_VALIDAS = ['inicio', 'casos', 'configurar', 'briefing', 'sala', 'preparacion', 'marco'];
+const VISTAS_VALIDAS = [
+  'inicio', 'casos', 'configurar', 'briefing', 'sala', 'preparacion', 'marco',
+  'competicion', 'profesor', 'aviso-legal', 'privacidad', 'cookies',
+];
+// Vistas que se pueden abrir directamente con un enlace (negolab.es/#privacidad):
+// las que no dependen de haber elegido antes un caso.
+const VISTAS_DIRECTAS = ['inicio', 'casos', 'preparacion', 'marco', 'competicion', 'profesor', 'aviso-legal', 'privacidad', 'cookies'];
 
 /* Cada vista queda registrada en el historial del navegador (con
    history.pushState) para que la flecha "atrás" del navegador vuelva a la
@@ -117,6 +131,9 @@ function ir(vista, opciones = {}) {
   );
   window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   if (vista === 'preparacion') { montarTablasPreparacion(); actualizarNotaPrep(); }
+  if (vista === 'competicion') pintarCompeticion();
+  else pararRefrescoRanking();
+  if (vista === 'profesor') pintarProfesor();
   // El avatar cuesta por minuto conectado: si salimos de la sala por la
   // navegación superior (no por "Salir"), lo cerramos igual que allí.
   if (veniaDeSala && vista !== 'sala') pararAvatar();
@@ -128,6 +145,7 @@ function ir(vista, opciones = {}) {
       history.pushState({ vista }, '', '#' + vista);
     }
   }
+  window.dispatchEvent(new CustomEvent('negociador:vista', { detail: vista }));
 }
 
 /* Al pulsar "atrás"/"adelante", el navegador nos dice a qué vista volver.
@@ -152,7 +170,21 @@ function actualizarNotaPrep() {
 
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-ir]');
-  if (b) { ir(b.dataset.ir); }
+  if (b) {
+    // En los enlaces (<a href="#...">) evitamos la navegación por ancla del
+    // navegador, que dispararía un popstate sin estado y nos llevaría a inicio.
+    if (b.tagName === 'A') e.preventDefault();
+    // Si la puerta de cookies está abierta como ventana y se pide una página
+    // legal, se cierra la ventana para poder leerla (sigue como barra abajo).
+    ir(b.dataset.ir);
+    return;
+  }
+  const d = e.target.closest('[data-desplazar]');
+  if (d) {
+    e.preventDefault();
+    const destino = document.getElementById(d.dataset.desplazar);
+    if (destino) destino.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 });
 
 /* ─────────── Biblioteca de casos ─────────── */
@@ -163,7 +195,14 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
    cerca de un minuto en despertar. Lanzamos un aviso nada más cargar la
    portada para que vaya arrancando mientras el usuario lee. */
 function despertarServidor() {
-  fetch(`${API}/api/salud`, { cache: 'no-store' }).catch(() => {});
+  return fetch(`${API}/api/salud`, { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((d) => {
+      estado.competicion.disponible = Boolean(d && d.competicion);
+      estado.competicion.reglas = (d && d.reglas) || null;
+      actualizarDisponibilidadCompeticion();
+    })
+    .catch(() => {});
 }
 
 async function cargarCasos({ intento = 1 } = {}) {
@@ -262,12 +301,14 @@ function abrirConfigurador(casoId) {
   );
   $('#btn-empezar').disabled = true;
   $('#nota-config').textContent = 'Elige primero tu papel.';
+  pintarCompeticionEnConfigurador();
   ir('configurar');
 }
 
 $$('.opcion[data-campo]').forEach((b) =>
   b.addEventListener('click', () => {
     const campo = b.dataset.campo;
+    if (campo === 'modo' && compiteEstaNegociacion()) return; // en competición, solo contraparte
     const valor = campo === 'dureza' ? parseInt(b.dataset.valor, 10) : b.dataset.valor;
     estado.config[campo] = valor;
     $$(`.opcion[data-campo="${campo}"]`).forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
@@ -432,17 +473,25 @@ function entrarEnLaSala() {
   // salir de la sala). Si el caso o el rol han cambiado desde la última vez
   // -aunque queden mensajes sin cerrar-, es una negociación nueva: no hay
   // que arrastrar el papel ni la conversación de la anterior.
+  const compite = compiteEstaNegociacion();
   const esLaMismaSesion =
     estado.mensajes.length &&
     !estado.terminada &&
     estado.sesionCasoId === estado.caso.id &&
-    estado.sesionRolId === estado.rolId;
+    estado.sesionRolId === estado.rolId &&
+    estado.sesionCompite === compite;
   if (esLaMismaSesion) { ir('sala'); iniciarAvatar(); return; }
 
   estado.mensajes = [];
   estado.terminada = false;
+  estado.firma = null;
   estado.sesionCasoId = estado.caso.id;
   estado.sesionRolId = estado.rolId;
+  estado.sesionCompite = compite;
+  if (compite) estado.config.modo = 'contraparte';
+  const ins = leerInscripcion();
+  $('#sala-competicion-fila').classList.toggle('oculto', !compite);
+  $('#sala-competicion').textContent = compite && ins ? ins.codigo : '—';
   $('#conversacion').innerHTML = '';
   $('#sala-caso').textContent = estado.caso.titulo;
   $('#sala-yo').textContent = estado.briefing.rol.nombre;
@@ -496,6 +545,7 @@ async function hablarConSimulacion() {
   caja.innerHTML = '<span class="escribiendo"><i></i><i></i><i></i></span>';
 
   let acumulado = '';
+  let firmaNueva = null;
 
   // Si tarda demasiado, casi siempre es que el servidor estaba dormido.
   const avisoLento = setTimeout(() => {
@@ -514,6 +564,7 @@ async function hablarConSimulacion() {
         rolId: estado.rolId,
         config: estado.config,
         mensajes: estado.mensajes,
+        firma: estado.firma,
       }),
     });
 
@@ -593,6 +644,7 @@ async function hablarConSimulacion() {
           if (!cuerpo || cuerpo === '[DONE]') continue;
           try {
             const ev = JSON.parse(cuerpo);
+            if (ev.type === 'firma_negociador') { firmaNueva = ev.firma; continue; }
             if (ev.type === 'content_block_delta' && ev.delta && ev.delta.text) {
               const texto = ev.delta.text;
               acumulado += texto;
@@ -620,6 +672,20 @@ async function hablarConSimulacion() {
     }
 
     estado.mensajes.push({ role: 'assistant', content: acumulado });
+    // La firma solo vale para el historial exacto que acaba de firmar el servidor.
+    estado.firma = firmaNueva;
+
+    // En competición la contraparte no puntúa: si aun así entrega un informe
+    // (porque el participante escribió "informe"), no se muestra; en su lugar
+    // se pide la evaluación oficial.
+    if (estado.sesionCompite && esInforme(acumulado)) {
+      contenedor.remove();
+      estado.ocupado = false;
+      // Se lanza al terminar este turno (después del "finally" de abajo),
+      // para que no vuelva a habilitar el botón de enviar mientras se evalúa.
+      setTimeout(evaluarCompeticion, 0);
+      return;
+    }
 
     if (esInforme(acumulado)) {
       contenedor.className = 'turno informe';
@@ -667,7 +733,7 @@ async function hablarConSimulacion() {
 
 function enviar(texto) {
   const t = (texto || '').trim();
-  if (!t || estado.ocupado) return;
+  if (!t || estado.ocupado || estado.evaluando) return;
   if (estado.terminada && !/repetir/i.test(t)) {
     turno('sistema', 'La simulación ya está cerrada. Vuelve a la biblioteca para empezar otra.', '');
     return;
@@ -684,7 +750,14 @@ $('#entrada').addEventListener('keydown', (e) => {
 });
 $$('[data-atajo]').forEach((b) =>
   b.addEventListener('click', () => {
-    if (b.dataset.atajo.startsWith('FIN') && !confirm('Se cerrará la negociación y la simulación entregará el informe. ¿Continuar?')) return;
+    const esFin = b.dataset.atajo.startsWith('FIN');
+    if (esFin && estado.sesionCompite) {
+      if (estado.terminada || estado.ocupado || estado.evaluando) return;
+      if (!confirm('Se cerrará la negociación y el evaluador independiente calculará tu puntuación para el ranking. ¿Continuar?')) return;
+      evaluarCompeticion();
+      return;
+    }
+    if (esFin && !confirm('Se cerrará la negociación y la simulación entregará el informe. ¿Continuar?')) return;
     enviar(b.dataset.atajo);
   })
 );
@@ -907,18 +980,6 @@ function cargarJsPDF() {
   return promesaJsPDF;
 }
 
-/* Valor de un campo; cadena vacía si no hay nada escrito. */
-function valorPrep(id) {
-  const el = document.getElementById(id);
-  const s = el && typeof el.value === 'string' ? el.value.trim() : '';
-  return s;
-}
-
-function variablesPrep() {
-  const datos = leerPrep();
-  return datos.variables && datos.variables.length ? datos.variables : ['', '', '', '', ''];
-}
-
 /* Fábrica de ayudas de dibujo para un documento jsPDF con la estética de la
    web (fondo oscuro, acento, tablas). Se comparte entre la hoja de
    preparación y el informe final de la negociación, para que ambos
@@ -1082,18 +1143,36 @@ function crearConstructorPdf(doc) {
   return { doc, pos, M, ancho, fondo, pie, saltarPagina, espacio, cabecera, seccion, tabla, campo, parrafo, lista, limpiarEnfasis };
 }
 
-async function descargarHojaPdf() {
+/* La hoja se dibuja a partir de sus datos guardados ({ variables, campos }),
+   no de lo que hay en pantalla: así sirve igual para la hoja actual del
+   navegador que para la hoja que se envió con un resultado de la competición
+   y se descarga después desde el ranking. */
+function lectorHoja(datos) {
+  const campos = (datos && datos.campos) || {};
+  const variables = datos && datos.variables && datos.variables.length ? datos.variables : ['', '', '', '', ''];
+  const v = (id) => {
+    const x = campos[id];
+    if (typeof x === 'string' && x.trim()) return x.trim();
+    // Los nombres de variable vienen rellenos por defecto con las del caso.
+    const m = id.match(/^(?:obj-(\d+)-var|var-(\d+)-nom)$/);
+    if (m) return variables[Number(m[1] || m[2])] || '';
+    return '';
+  };
+  return { v, variables };
+}
+
+async function descargarHojaPdf(datos = leerPrep(), meta = {}) {
   const JsPDF = await cargarJsPDF();
   const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: true });
   const pdf = crearConstructorPdf(doc);
+  const { v: valorPrep, variables } = lectorHoja(datos);
 
   pdf.cabecera('Hoja de preparación', [
-    ['Caso', estado.caso ? estado.caso.titulo : ''],
-    ['Mi papel', estado.briefing ? estado.briefing.rol.nombre : ''],
-    ['Fecha', new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })],
+    ['Caso', meta.caso !== undefined ? meta.caso : estado.caso ? estado.caso.titulo : ''],
+    ['Mi papel', meta.rol !== undefined ? meta.rol : estado.briefing ? estado.briefing.rol.nombre : ''],
+    ['Fecha', fechaLarga(meta.fecha)],
   ]);
 
-  const variables = variablesPrep();
   const oNo = (s) => (s ? s : SIN_RESPUESTA);
 
   pdf.seccion('1', 'Mis objetivos por variable', 'óptimo, satisfactorio, mínimo');
@@ -1144,7 +1223,12 @@ async function descargarHojaPdf() {
   pdf.campo('Tácticas que espero y mi respuesta', valorPrep('p-tacticas'));
 
   pdf.pie();
-  doc.save('hoja-preparacion-negociacion.pdf');
+  doc.save(meta.fichero || 'hoja-preparacion-negociacion.pdf');
+}
+
+function fechaLarga(f) {
+  const d = f ? new Date(f) : new Date();
+  return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
 /* ── Descarga del informe final en PDF ───
@@ -1208,22 +1292,24 @@ function renderizarInformeEnPdf(pdf, texto) {
   cerrarLista();
 }
 
-async function descargarInformePdf(textoInforme) {
+async function descargarInformePdf(textoInforme, meta = null) {
   const JsPDF = await cargarJsPDF();
   const doc = new JsPDF({ unit: 'mm', format: 'a4', compress: true });
   const pdf = crearConstructorPdf(doc);
 
-  pdf.cabecera('Informe de la negociación', [
-    ['Caso', estado.caso ? estado.caso.titulo : ''],
-    ['Mi papel', estado.briefing ? estado.briefing.rol.nombre : ''],
-    ['Simulación', estado.briefing ? estado.briefing.contraparte.nombre : ''],
-    ['Fecha', new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })],
-  ]);
+  const filas = meta
+    ? meta.filas
+    : [
+        ['Caso', estado.caso ? estado.caso.titulo : ''],
+        ['Mi papel', estado.briefing ? estado.briefing.rol.nombre : ''],
+        ['Simulación', estado.briefing ? estado.briefing.contraparte.nombre : ''],
+      ];
+  pdf.cabecera((meta && meta.titulo) || 'Informe de la negociación', [...filas, ['Fecha', fechaLarga(meta && meta.fecha)]]);
 
   renderizarInformeEnPdf(pdf, textoInforme);
 
   pdf.pie();
-  doc.save('informe-negociacion.pdf');
+  doc.save((meta && meta.fichero) || 'informe-negociacion.pdf');
 }
 
 /* Igual que con la hoja de preparación: si el PDF no se puede generar (sin
@@ -1239,14 +1325,13 @@ function descargarInformeMarkdown(textoInforme) {
 
 /* Si el PDF no se puede generar (sin red, CDN bloqueada), se descarga
    la misma hoja en texto para no dejar al usuario sin nada. */
-function descargarHojaMarkdown() {
-  const v = valorPrep;
+function descargarHojaMarkdown(datos = leerPrep(), meta = {}) {
+  const { v, variables } = lectorHoja(datos);
   const oNo = (s) => (s ? s : SIN_RESPUESTA);
-  const variables = variablesPrep();
 
   let t = '# Hoja de preparación de la negociación\n\n';
-  t += `**Caso**: ${oNo(estado.caso ? estado.caso.titulo : '')}\n\n`;
-  t += `**Mi papel**: ${oNo(estado.briefing ? estado.briefing.rol.nombre : '')}\n\n`;
+  t += `**Caso**: ${oNo(meta.caso !== undefined ? meta.caso : estado.caso ? estado.caso.titulo : '')}\n\n`;
+  t += `**Mi papel**: ${oNo(meta.rol !== undefined ? meta.rol : estado.briefing ? estado.briefing.rol.nombre : '')}\n\n`;
 
   t += '## 1. Objetivos por variable\n\n| Variable | Óptimo | Satisfactorio | Mínimo |\n|---|---|---|---|\n';
   variables.forEach((_, i) => {
@@ -1265,7 +1350,7 @@ function descargarHojaMarkdown() {
 
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([t], { type: 'text/markdown;charset=utf-8' }));
-  a.download = 'hoja-preparacion-negociacion.md';
+  a.download = (meta.fichero || 'hoja-preparacion-negociacion.pdf').replace(/\.pdf$/, '.md');
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -1287,11 +1372,644 @@ $('#btn-descargar-prep').addEventListener('click', async () => {
   }
 });
 
+/* ─────────── Competición ───────────
+   El participante se apunta con el código de su grupo y un nombre o alias.
+   Al terminar una negociación que puntúa, la web pide al servidor la
+   evaluación oficial (/api/evaluar), que devuelve los puntos, el informe y
+   un token privado. Ese token se guarda solo en este navegador: es lo que
+   permite descargar después el informe y la hoja desde el ranking, y que
+   nadie más pueda hacerlo. */
+
+const CLAVE_INSCRIPCION = 'negociador-competicion-v1';
+const CLAVE_MIS_RESULTADOS = 'negociador-mis-resultados-v1';
+
+function leerLocal(clave, porDefecto) {
+  try { const v = JSON.parse(localStorage.getItem(clave)); return v === null ? porDefecto : v; } catch { return porDefecto; }
+}
+function escribirLocal(clave, valor) {
+  try { localStorage.setItem(clave, JSON.stringify(valor)); } catch {}
+}
+
+const leerInscripcion = () => leerLocal(CLAVE_INSCRIPCION, null);
+const leerMisResultados = () => leerLocal(CLAVE_MIS_RESULTADOS, []);
+function guardarMiResultado(r) {
+  const lista = leerMisResultados().filter((x) => x.id !== r.id);
+  lista.unshift(r);
+  escribirLocal(CLAVE_MIS_RESULTADOS, lista.slice(0, 200));
+}
+function olvidarMiResultado(id) {
+  escribirLocal(CLAVE_MIS_RESULTADOS, leerMisResultados().filter((x) => x.id !== id));
+}
+
+function compiteEstaNegociacion() {
+  return Boolean(estado.competicion.disponible && leerInscripcion() && estado.competicion.puntua);
+}
+
+const fmtNum = (n) => (Math.round(Number(n) * 10) / 10).toLocaleString('es-ES', { maximumFractionDigits: 1 });
+const fechaCorta = (f) => new Date(f).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+
+async function pedirJson(url, opciones = {}) {
+  const r = await fetch(url, opciones);
+  let datos = {};
+  try { datos = await r.json(); } catch {}
+  return { r, datos };
+}
+
+function actualizarDisponibilidadCompeticion() {
+  const activa = $('.vista.activa');
+  if (activa && activa.id === 'vista-configurar' && estado.caso) pintarCompeticionEnConfigurador();
+  if (activa && activa.id === 'vista-competicion') pintarCompeticion();
+  if (activa && activa.id === 'vista-profesor') pintarProfesor();
+}
+
+/* ─── En el configurador ─── */
+
+function aplicarBloqueoModo() {
+  const compite = compiteEstaNegociacion();
+  if (compite) estado.config.modo = 'contraparte';
+  $$('.opcion[data-campo="modo"]').forEach((o) => {
+    o.disabled = compite && o.dataset.valor !== 'contraparte';
+    o.setAttribute('aria-pressed', String(o.dataset.valor === estado.config.modo));
+  });
+}
+
+function pintarCompeticionEnConfigurador() {
+  const bloque = $('#bloque-competicion');
+  if (!estado.competicion.disponible) { bloque.classList.add('oculto'); aplicarBloqueoModo(); return; }
+  bloque.classList.remove('oculto');
+  const ins = leerInscripcion();
+  const caja = $('#competicion-config');
+  if (!ins) {
+    caja.innerHTML = `<p class="ayuda" style="margin:0 0 12px">¿Tu profesor te ha dado un código de grupo?
+      Apúntate y esta negociación puntuará en el ranking.</p>
+      <button class="boton secundario" type="button" data-ir="competicion">Apuntarme a una competición</button>`;
+    aplicarBloqueoModo();
+    return;
+  }
+  caja.innerHTML = `<label class="casilla">
+      <input type="checkbox" id="chk-puntua" ${estado.competicion.puntua ? 'checked' : ''}>
+      <span>Esta negociación puntúa en <strong>${escapar(ins.nombreGrupo || ins.codigo)}</strong> (${escapar(ins.codigo)})
+      como <strong>${escapar(ins.nombre)}</strong>.</span>
+    </label>
+    <p class="ayuda" style="margin:10px 0 0">En competición la simulación juega solo como contraparte, sin coach ni tiempo
+      muerto, y al pulsar «Fin de la simulación» te puntúa un evaluador independiente.
+      <a href="#" data-desplazar-reglas>Cómo se puntúa</a>.</p>`;
+  $('#chk-puntua').addEventListener('change', (e) => {
+    estado.competicion.puntua = e.target.checked;
+    aplicarBloqueoModo();
+  });
+  caja.querySelector('[data-desplazar-reglas]').addEventListener('click', (e) => {
+    e.preventDefault();
+    ir('competicion');
+    setTimeout(() => $('#reglas-competicion').scrollIntoView({ behavior: 'smooth' }), 50);
+  });
+  aplicarBloqueoModo();
+}
+
+/* ─── Evaluación oficial al terminar ─── */
+
+function hojaParaEnviar() {
+  const datos = leerPrep();
+  const campos = datos.campos || {};
+  const alguno = Object.keys(campos).some(
+    (k) => !/^(obj-\d+-var|var-\d+-nom)$/.test(k) && typeof campos[k] === 'string' && campos[k].trim()
+  );
+  return alguno ? { variables: datos.variables || [], campos } : null;
+}
+
+function bloquearComposicion(bloquear) {
+  $('#btn-enviar').disabled = bloquear;
+  const mic = $('#btn-microfono');
+  if (mic) mic.disabled = bloquear;
+}
+
+async function evaluarCompeticion() {
+  if (estado.evaluando || estado.terminada || estado.ocupado) return;
+  const ins = leerInscripcion();
+  if (!ins) { turno('sistema', 'Ya no estás apuntado a ninguna competición, así que esta negociación no puede puntuar.', ''); return; }
+
+  estado.evaluando = true;
+  bloquearComposicion(true);
+  const aviso = turno('sistema', '', '');
+  aviso.querySelector('.texto').innerHTML =
+    '<span class="escribiendo"><i></i><i></i><i></i></span><br>Negociación cerrada. El evaluador independiente está leyendo la conversación completa; tarda alrededor de un minuto.';
+
+  const hoja = hojaParaEnviar();
+  try {
+    const { r, datos } = await pedirJson(`${API}/api/evaluar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grupo: ins.codigo,
+        nombre: ins.nombre,
+        consentimiento: true,
+        casoId: estado.caso.id,
+        rolId: estado.rolId,
+        config: estado.config,
+        mensajes: estado.mensajes,
+        firma: estado.firma,
+        hoja,
+      }),
+    });
+
+    if (!r.ok) {
+      const reintentable = r.status >= 500 || r.status === 429;
+      aviso.querySelector('.texto').innerHTML =
+        `<span style="color:var(--rojo)">${escapar(datos.error || 'No se ha podido completar la evaluación.')}</span>` +
+        (reintentable ? '<br><button class="boton secundario" type="button" style="margin-top:10px">Reintentar la evaluación</button>' : '');
+      const b = aviso.querySelector('button');
+      if (b) b.addEventListener('click', () => { aviso.remove(); evaluarCompeticion(); });
+      return;
+    }
+
+    estado.terminada = true;
+    const meta = {
+      id: datos.id,
+      token: datos.token,
+      codigo: ins.codigo,
+      nombre: ins.nombre,
+      caso: estado.caso.titulo,
+      rol: estado.briefing.rol.nombre,
+      puntos: datos.puntos.puntos,
+      fecha: new Date().toISOString(),
+    };
+    guardarMiResultado(meta);
+    aviso.remove();
+    pintarInformeOficial(datos, meta, hoja);
+  } catch (err) {
+    aviso.querySelector('.texto').innerHTML =
+      `<span style="color:var(--rojo)">Error de conexión: ${escapar(String(err.message || err))}</span>
+       <br><button class="boton secundario" type="button" style="margin-top:10px">Reintentar la evaluación</button>`;
+    aviso.querySelector('button').addEventListener('click', () => { aviso.remove(); evaluarCompeticion(); });
+  } finally {
+    estado.evaluando = false;
+    bloquearComposicion(false);
+  }
+}
+
+function pintarInformeOficial(datos, meta, hoja) {
+  const p = datos.puntos;
+  const div = turno('informe', '', 'Evaluación oficial de la competición');
+  const caja = div.querySelector('.texto');
+  caja.innerHTML = `<div class="resultado-competicion">
+      <div class="cifra">${fmtNum(p.puntos)} puntos</div>
+      <div>Puesto <strong>${datos.posicion}</strong> en el ranking de tu grupo ahora mismo ·
+        (${p.rubrica} de rúbrica + ${fmtNum(p.resultado)} de resultado) × ${fmtNum(p.factor)} por dureza</div>
+    </div>` + md(datos.informe);
+
+  const barra = document.createElement('div');
+  barra.className = 'barra-accion';
+  barra.style.marginTop = '14px';
+  const boton = (texto, clase, accion) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'boton ' + clase; b.textContent = texto;
+    b.addEventListener('click', accion);
+    barra.appendChild(b);
+    return b;
+  };
+  const metaInforme = {
+    filas: [['Caso', meta.caso], ['Mi papel', meta.rol], ['Participante', meta.nombre], ['Puntos', fmtNum(meta.puntos)]],
+    fecha: meta.fecha,
+  };
+  boton('Descargar informe en PDF', 'secundario', () =>
+    conBotonOcupado(barra.children[0], () => descargarInformePdf(datos.informe, metaInforme), () => descargarInformeMarkdown(datos.informe))
+  );
+  if (hoja) {
+    boton('Descargar mi hoja en PDF', 'secundario', (e) =>
+      conBotonOcupado(e.target, () => descargarHojaPdf(hoja, { caso: meta.caso, rol: meta.rol, fecha: meta.fecha }), () => descargarHojaMarkdown(hoja, { caso: meta.caso, rol: meta.rol }))
+    );
+  }
+  boton('Ver el ranking', '', () => ir('competicion'));
+  div.appendChild(barra);
+  $('#conversacion').scrollTop = div.offsetTop - 20;
+  turno('sistema', 'Simulación cerrada y registrada en el ranking. Puedes repetir el caso, cambiar de papel o subir la dureza desde la biblioteca.', '');
+}
+
+async function conBotonOcupado(boton, generar, respaldo) {
+  const etiqueta = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = 'Generando el PDF…';
+  try {
+    await generar();
+  } catch (err) {
+    console.error(err);
+    alert('No se ha podido generar el PDF (' + (err.message || err) + '). Te lo descargo en texto.');
+    if (respaldo) respaldo();
+  } finally {
+    boton.disabled = false;
+    boton.textContent = etiqueta;
+  }
+}
+
+/* ─── Vista de competición: inscripción y ranking ─── */
+
+let rankingDatos = null;
+let temporizadorRanking = null;
+
+function pararRefrescoRanking() {
+  if (temporizadorRanking) { clearInterval(temporizadorRanking); temporizadorRanking = null; }
+}
+
+function pintarCompeticion() {
+  $('#comp-no-disponible').classList.toggle('oculto', estado.competicion.disponible);
+  const ins = leerInscripcion();
+  const form = $('#form-competicion');
+  const estadoCaja = $('#comp-estado');
+
+  if (ins) {
+    $('#comp-titulo-inscripcion').textContent = 'Tu inscripción';
+    form.classList.add('oculto');
+    estadoCaja.innerHTML = `<div class="inscripcion-activa">
+        Estás en <strong>${escapar(ins.nombreGrupo || ins.codigo)}</strong> (${escapar(ins.codigo)})
+        como <strong>${escapar(ins.nombre)}</strong>.
+        ${ins.abierto === false ? '<br><span style="color:var(--rojo)">Esta competición está cerrada: ya no admite resultados nuevos.</span>' : ''}
+      </div>
+      <div class="barra-accion">
+        <button class="boton" type="button" data-ir="casos">Elegir un caso y competir</button>
+        <button class="boton fantasma" type="button" id="btn-comp-salir">Cambiar de grupo o de nombre</button>
+      </div>`;
+    $('#btn-comp-salir').addEventListener('click', () => {
+      if (!confirm('Dejarás de competir en este grupo desde este navegador. Tus resultados siguen en el ranking y podrás volver a apuntarte con el mismo código. ¿Continuar?')) return;
+      localStorage.removeItem(CLAVE_INSCRIPCION);
+      $('#comp-codigo').value = ins.codigo;
+      $('#comp-nombre').value = ins.nombre;
+      pintarCompeticion();
+    });
+    $('#comp-ranking-bloque').classList.remove('oculto');
+    // Ya inscrito, lo que interesa es el ranking: va arriba, antes de las reglas.
+    $('#comp-cuerpo').before($('#comp-ranking-bloque'));
+    $('#rk-grupo').textContent = `${ins.nombreGrupo || ''} · ${ins.codigo}`;
+    if (estado.competicion.disponible) {
+      cargarRanking();
+      pararRefrescoRanking();
+      // Para proyectarlo en clase: se refresca solo mientras la vista está abierta.
+      temporizadorRanking = setInterval(() => { if (!document.hidden) cargarRanking(); }, 30000);
+    }
+  } else {
+    $('#comp-titulo-inscripcion').textContent = 'Apúntate';
+    form.classList.remove('oculto');
+    estadoCaja.innerHTML = '';
+    $('#comp-ranking-bloque').classList.add('oculto');
+    $('#comp-cuerpo').after($('#comp-ranking-bloque'));
+    pararRefrescoRanking();
+  }
+  $('#btn-comp-entrar').disabled = !estado.competicion.disponible;
+}
+
+$('#form-competicion').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nota = $('#nota-competicion');
+  const codigo = $('#comp-codigo').value.trim().toUpperCase();
+  const nombre = $('#comp-nombre').value.replace(/\s+/g, ' ').trim();
+  if (nombre.length < 2) { nota.textContent = 'Escribe un nombre o alias de al menos 2 caracteres.'; return; }
+  if (!$('#comp-consentimiento').checked) { nota.textContent = 'Tienes que aceptar las condiciones para competir.'; return; }
+  const btn = $('#btn-comp-entrar');
+  btn.disabled = true;
+  nota.textContent = 'Comprobando el código…';
+  try {
+    const { r, datos } = await pedirJson(`${API}/api/grupos/${encodeURIComponent(codigo)}`);
+    if (!r.ok) { nota.textContent = datos.error || 'No se ha podido comprobar el código.'; return; }
+    escribirLocal(CLAVE_INSCRIPCION, {
+      codigo: datos.grupo.codigo,
+      nombreGrupo: datos.grupo.nombre,
+      abierto: datos.grupo.abierto,
+      nombre,
+      consentimiento: new Date().toISOString(),
+    });
+    estado.competicion.puntua = true;
+    nota.textContent = '';
+    pintarCompeticion();
+  } catch (err) {
+    nota.textContent = 'No se ha podido contactar con el servidor. Reinténtalo en un momento.';
+  } finally {
+    btn.disabled = !estado.competicion.disponible;
+  }
+});
+
+async function cargarRanking() {
+  const ins = leerInscripcion();
+  if (!ins) return;
+  try {
+    const { r, datos } = await pedirJson(`${API}/api/ranking/${encodeURIComponent(ins.codigo)}`, { cache: 'no-store' });
+    if (!r.ok) {
+      $('#rk-tabla').innerHTML = `<div class="aviso">${escapar(datos.error || 'No se ha podido cargar el ranking.')}</div>`;
+      return;
+    }
+    // Si el profesor cierra o reabre el grupo, se refleja aquí.
+    if (datos.grupo && datos.grupo.abierto !== ins.abierto) {
+      escribirLocal(CLAVE_INSCRIPCION, { ...ins, abierto: datos.grupo.abierto });
+    }
+    rankingDatos = datos.resultados || [];
+    rellenarFiltrosRanking();
+    pintarRanking();
+  } catch {
+    $('#rk-tabla').innerHTML = '<div class="aviso info">Despertando el servidor… El ranking aparecerá en unos segundos.</div>';
+  }
+}
+
+function rellenarFiltrosRanking() {
+  const rellenar = (sel, pares, todos) => {
+    const actual = sel.value;
+    sel.innerHTML = `<option value="">${todos}</option>` + pares.map(([v, t]) => `<option value="${escapar(v)}">${escapar(t)}</option>`).join('');
+    if (pares.some(([v]) => v === actual)) sel.value = actual;
+  };
+  const unicos = (f) => [...new Map(rankingDatos.map((x) => f(x))).entries()];
+  rellenar($('#rk-caso'), unicos((x) => [x.caso_id, x.caso_titulo]), 'Todos los casos');
+  rellenar($('#rk-rol'), unicos((x) => [x.rol_id, x.rol_nombre]), 'Todos los papeles');
+}
+
+function pintarRanking() {
+  if (!rankingDatos) return;
+  const caso = $('#rk-caso').value;
+  const rol = $('#rk-rol').value;
+  const mejor = $('#rk-mejor').checked;
+  const mios = new Map(leerMisResultados().map((m) => [m.id, m]));
+
+  let filas = rankingDatos.filter((x) => (!caso || x.caso_id === caso) && (!rol || x.rol_id === rol));
+  if (mejor) {
+    // Ya vienen ordenados de más a menos puntos: nos quedamos con el primero de cada persona.
+    const vistos = new Set();
+    filas = filas.filter((x) => {
+      const k = x.nombre.toLocaleLowerCase('es');
+      if (vistos.has(k)) return false;
+      vistos.add(k);
+      return true;
+    });
+  }
+
+  if (!filas.length) {
+    $('#rk-tabla').innerHTML = '<p class="vacio">Todavía no hay resultados con estos filtros. ¡Sé el primero!</p>';
+    return;
+  }
+
+  let posicion = 0;
+  let anterior = null;
+  const html = filas.map((x, i) => {
+    if (x.puntos !== anterior) { posicion = i + 1; anterior = x.puntos; }
+    const mio = mios.get(x.id);
+    const acciones = mio
+      ? `<div class="acciones">
+           <button class="boton secundario" type="button" data-mio="informe" data-id="${x.id}">Informe</button>
+           ${x.hoja_completitud > 0 ? `<button class="boton secundario" type="button" data-mio="hoja" data-id="${x.id}">Hoja</button>` : ''}
+           <button class="boton fantasma" type="button" data-mio="borrar" data-id="${x.id}" title="Borrar mi resultado">Borrar</button>
+         </div>`
+      : '';
+    return `<tr class="${mio ? 'mio' : ''} ${posicion <= 3 ? 'podio-' + posicion : ''}">
+        <td class="pos">${posicion}</td>
+        <td>${escapar(x.nombre)}${mio ? ' <small style="color:var(--acento)">(tú)</small>' : ''}</td>
+        <td>${escapar(x.rol_nombre)}</td>
+        <td>${escapar(x.caso_titulo)}</td>
+        <td>${escapar(NOMBRE_DUREZA[x.dureza] || String(x.dureza))}</td>
+        <td style="white-space:nowrap">${x.hoja_rellenada ? `Sí <small style="color:var(--tenue)">${x.hoja_completitud} %</small>` : 'No'}</td>
+        <td class="num puntos">${fmtNum(x.puntos)}</td>
+        <td style="white-space:nowrap;color:var(--tenue)">${fechaCorta(x.creado)}</td>
+        <td>${acciones}</td>
+      </tr>`;
+  }).join('');
+
+  $('#rk-tabla').innerHTML = `<div class="tabla-desplazable"><table class="ranking">
+      <thead><tr><th>#</th><th>Nombre</th><th>Papel</th><th>Caso</th><th>Dureza</th><th>Hoja</th><th>Puntos</th><th>Fecha</th><th>Tus descargas</th></tr></thead>
+      <tbody>${html}</tbody></table></div>`;
+
+  $$('#rk-tabla [data-mio]').forEach((b) => b.addEventListener('click', () => accionMiResultado(b)));
+}
+
+['#rk-caso', '#rk-rol', '#rk-mejor'].forEach((s) => $(s).addEventListener('change', pintarRanking));
+$('#rk-actualizar').addEventListener('click', cargarRanking);
+
+async function accionMiResultado(boton) {
+  const id = boton.dataset.id;
+  const accion = boton.dataset.mio;
+  const mio = leerMisResultados().find((m) => m.id === id);
+  if (!mio) return;
+
+  if (accion === 'borrar') {
+    if (!confirm('Se borrará este resultado del ranking, con su informe y su hoja. No se puede deshacer. ¿Continuar?')) return;
+    const { r, datos } = await pedirJson(`${API}/api/resultados/${id}/borrar`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: mio.token }),
+    });
+    if (!r.ok) { alert(datos.error || 'No se ha podido borrar.'); return; }
+    olvidarMiResultado(id);
+    cargarRanking();
+    return;
+  }
+
+  const etiqueta = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = '…';
+  try {
+    const { r, datos } = await pedirJson(`${API}/api/resultados/${id}/descarga`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: mio.token }),
+    });
+    if (!r.ok) { alert(datos.error || 'No se ha podido descargar.'); return; }
+    await descargarDeResultado(datos.resultado, accion);
+  } catch (err) {
+    alert('No se ha podido generar el PDF: ' + (err.message || err));
+  } finally {
+    boton.disabled = false;
+    boton.textContent = etiqueta;
+  }
+}
+
+/* Genera el PDF del informe o de la hoja a partir de un resultado guardado
+   (lo usan tanto el participante como el profesor). */
+async function descargarDeResultado(res, que) {
+  const sufijo = `${res.nombre}-${res.caso_titulo}`.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (que === 'hoja') {
+    if (!res.hoja) { alert('Este resultado no tiene hoja de preparación.'); return; }
+    const meta = { caso: res.caso_titulo, rol: res.rol_nombre, fecha: res.creado, fichero: `hoja-${sufijo}.pdf` };
+    try { await descargarHojaPdf(res.hoja, meta); } catch { descargarHojaMarkdown(res.hoja, meta); }
+    return;
+  }
+  const meta = {
+    filas: [['Caso', res.caso_titulo], ['Papel', res.rol_nombre], ['Participante', res.nombre], ['Dureza', NOMBRE_DUREZA[res.dureza] || ''], ['Puntos', fmtNum(res.puntos)]],
+    fecha: res.creado,
+    fichero: `informe-${sufijo}.pdf`,
+  };
+  try { await descargarInformePdf(res.informe, meta); } catch { descargarInformeMarkdown(res.informe); }
+}
+
+/* ─────────── Panel del profesor ─────────── */
+
+const CLAVE_PROFESOR = 'negociador-profesor';
+let profResultados = [];
+let profGrupoActual = null;
+
+const claveProfesor = () => { try { return sessionStorage.getItem(CLAVE_PROFESOR) || ''; } catch { return ''; } };
+
+async function apiProfesor(ruta, opciones = {}) {
+  const { r, datos } = await pedirJson(`${API}/api/admin/${ruta}`, {
+    ...opciones,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${claveProfesor()}`, ...(opciones.headers || {}) },
+  });
+  if (r.status === 401) {
+    try { sessionStorage.removeItem(CLAVE_PROFESOR); } catch {}
+    pintarProfesor();
+    $('#nota-prof-login').textContent = datos.error || 'Clave incorrecta.';
+  }
+  return { r, datos };
+}
+
+function pintarProfesor() {
+  $('#prof-no-disponible').classList.toggle('oculto', estado.competicion.disponible);
+  const dentro = Boolean(claveProfesor());
+  $('#prof-login').classList.toggle('oculto', dentro);
+  $('#prof-panel').classList.toggle('oculto', !dentro);
+  if (dentro) cargarGruposProfesor();
+}
+
+$('#prof-login').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try { sessionStorage.setItem(CLAVE_PROFESOR, $('#prof-clave').value); } catch {}
+  $('#prof-clave').value = '';
+  $('#nota-prof-login').textContent = '';
+  pintarProfesor();
+});
+
+$('#prof-salir').addEventListener('click', () => {
+  try { sessionStorage.removeItem(CLAVE_PROFESOR); } catch {}
+  profGrupoActual = null;
+  $('#prof-resultados-bloque').classList.add('oculto');
+  pintarProfesor();
+});
+
+$('#prof-crear').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nota = $('#nota-prof-crear');
+  nota.textContent = 'Creando…';
+  const { r, datos } = await apiProfesor('grupos', {
+    method: 'POST',
+    body: JSON.stringify({ nombre: $('#prof-grupo-nombre').value, codigo: $('#prof-grupo-codigo').value }),
+  });
+  if (!r.ok) { if (r.status !== 401) nota.textContent = datos.error || 'No se ha podido crear el grupo.'; return; }
+  nota.textContent = `Grupo creado. Código para tus alumnos: ${datos.grupo.codigo}`;
+  $('#prof-grupo-nombre').value = '';
+  $('#prof-grupo-codigo').value = '';
+  cargarGruposProfesor();
+});
+
+async function cargarGruposProfesor() {
+  const caja = $('#prof-grupos');
+  caja.innerHTML = '<p class="vacio">Cargando…</p>';
+  let res;
+  try { res = await apiProfesor('grupos'); } catch { caja.innerHTML = '<div class="aviso">No se ha podido contactar con el servidor.</div>'; return; }
+  const { r, datos } = res;
+  if (!r.ok) { caja.innerHTML = r.status === 401 ? '' : `<div class="aviso">${escapar(datos.error || 'Error')}</div>`; return; }
+  if (!datos.grupos.length) { caja.innerHTML = '<p class="vacio">Todavía no hay grupos. Crea el primero arriba.</p>'; return; }
+  caja.innerHTML = `<div class="tabla-desplazable"><table class="ranking">
+    <thead><tr><th>Nombre</th><th>Código</th><th>Estado</th><th>Resultados</th><th>Creado</th><th></th></tr></thead>
+    <tbody>${datos.grupos.map((g) => `<tr>
+      <td>${escapar(g.nombre)}</td>
+      <td><code>${escapar(g.codigo)}</code></td>
+      <td>${g.abierto ? '<span style="color:var(--verde)">Abierto</span>' : '<span style="color:var(--tenue)">Cerrado</span>'}</td>
+      <td class="num">${g.resultados}</td>
+      <td style="color:var(--tenue)">${fechaCorta(g.creado)}</td>
+      <td><div class="acciones">
+        <button class="boton secundario" type="button" data-g="ver" data-codigo="${escapar(g.codigo)}">Ver resultados</button>
+        <button class="boton fantasma" type="button" data-g="${g.abierto ? 'cerrar' : 'abrir'}" data-codigo="${escapar(g.codigo)}">${g.abierto ? 'Cerrar' : 'Reabrir'}</button>
+        <button class="boton peligro" type="button" data-g="borrar" data-codigo="${escapar(g.codigo)}">Borrar</button>
+      </div></td></tr>`).join('')}</tbody></table></div>`;
+  $$('#prof-grupos [data-g]').forEach((b) => b.addEventListener('click', () => accionGrupo(b.dataset.g, b.dataset.codigo, datos.grupos.find((g) => g.codigo === b.dataset.codigo))));
+}
+
+async function accionGrupo(accion, codigo, grupo) {
+  const ruta = `grupos/${encodeURIComponent(codigo)}`;
+  if (accion === 'ver') { verResultadosProfesor(codigo, grupo); return; }
+  if (accion === 'borrar') {
+    if (prompt(`Se borrará el grupo ${codigo} con TODOS sus resultados. No se puede deshacer.\nEscribe el código para confirmar:`) !== codigo) return;
+    await apiProfesor(ruta, { method: 'DELETE' });
+    if (profGrupoActual === codigo) $('#prof-resultados-bloque').classList.add('oculto');
+  } else {
+    await apiProfesor(ruta, { method: 'PATCH', body: JSON.stringify({ abierto: accion === 'abrir' }) });
+  }
+  cargarGruposProfesor();
+}
+
+async function verResultadosProfesor(codigo, grupo) {
+  profGrupoActual = codigo;
+  $('#prof-resultados-bloque').classList.remove('oculto');
+  $('#prof-resultados-grupo').textContent = `${grupo ? grupo.nombre : ''} · ${codigo}`;
+  const caja = $('#prof-resultados');
+  caja.innerHTML = '<p class="vacio">Cargando…</p>';
+  const { r, datos } = await apiProfesor(`grupos/${encodeURIComponent(codigo)}`);
+  if (!r.ok) { caja.innerHTML = `<div class="aviso">${escapar(datos.error || 'Error')}</div>`; return; }
+  profResultados = datos.resultados;
+  if (!profResultados.length) { caja.innerHTML = '<p class="vacio">Este grupo todavía no tiene resultados.</p>'; return; }
+  caja.innerHTML = `<div class="tabla-desplazable"><table class="ranking">
+    <thead><tr><th>#</th><th>Nombre</th><th>Papel</th><th>Caso</th><th>Dureza</th><th>Hoja</th><th>Rúbrica</th><th>Resultado</th><th>×</th><th>Puntos</th><th>Fecha</th><th></th></tr></thead>
+    <tbody>${profResultados.map((x, i) => `<tr>
+      <td class="pos">${i + 1}</td><td>${escapar(x.nombre)}</td><td>${escapar(x.rol_nombre)}</td><td>${escapar(x.caso_titulo)}</td>
+      <td>${x.dureza}</td><td style="white-space:nowrap">${x.hoja_rellenada ? 'Sí' : 'No'} <small style="color:var(--tenue)">${x.hoja_completitud} %</small></td>
+      <td class="num">${fmtNum(x.rubrica)}</td><td class="num">${fmtNum(x.resultado)}</td><td class="num">${fmtNum(x.factor)}</td>
+      <td class="num puntos">${fmtNum(x.puntos)}</td><td style="color:var(--tenue);white-space:nowrap">${fechaCorta(x.creado)}</td>
+      <td><div class="acciones">
+        <button class="boton secundario" type="button" data-r="informe" data-id="${x.id}">Informe</button>
+        ${x.hoja_completitud > 0 ? `<button class="boton secundario" type="button" data-r="hoja" data-id="${x.id}">Hoja</button>` : ''}
+        <button class="boton peligro" type="button" data-r="borrar" data-id="${x.id}">Anular</button>
+      </div></td></tr>`).join('')}</tbody></table></div>`;
+  $$('#prof-resultados [data-r]').forEach((b) => b.addEventListener('click', () => accionResultadoProfesor(b)));
+}
+
+async function accionResultadoProfesor(b) {
+  const id = b.dataset.id;
+  if (b.dataset.r === 'borrar') {
+    if (!confirm('Se anulará este resultado: desaparece del ranking junto con su informe y su hoja. ¿Continuar?')) return;
+    await apiProfesor(`resultados/${id}`, { method: 'DELETE' });
+    verResultadosProfesor(profGrupoActual);
+    cargarGruposProfesor();
+    return;
+  }
+  const etiqueta = b.textContent;
+  b.disabled = true; b.textContent = '…';
+  try {
+    const { r, datos } = await apiProfesor(`resultados/${id}`);
+    if (r.ok) await descargarDeResultado(datos.resultado, b.dataset.r);
+  } finally {
+    b.disabled = false; b.textContent = etiqueta;
+  }
+}
+
+$('#prof-csv').addEventListener('click', () => {
+  if (!profResultados.length) return;
+  const cab = ['Posición', 'Nombre', 'Papel', 'Caso', 'Dureza', 'Hoja rellenada', 'Hoja %', 'Rúbrica', 'Resultado', 'Factor', 'Puntos', 'Fecha'];
+  const c = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const num = (n) => String(Math.round(Number(n) * 10) / 10).replace('.', ',');
+  const filas = profResultados.map((x, i) => [
+    i + 1, x.nombre, x.rol_nombre, x.caso_titulo, x.dureza, x.hoja_rellenada ? 'Sí' : 'No', x.hoja_completitud,
+    num(x.rubrica), num(x.resultado), num(x.factor), num(x.puntos), new Date(x.creado).toLocaleString('es-ES'),
+  ]);
+  // Separador ";" y BOM para que Excel en español lo abra bien a la primera.
+  const csv = '﻿' + [cab, ...filas].map((f) => f.map(c).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `ranking-${profGrupoActual}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+/* ─────────── Titular del sitio (páginas legales) ─────────── */
+
+function rellenarTitular() {
+  const t = window.NEGOCIADOR_TITULAR || {};
+  if (t.nombre) $$('[data-titular="nombre"]').forEach((el) => { el.textContent = t.nombre; });
+  if (t.email) {
+    $$('[data-titular="email"]').forEach((a) => {
+      a.textContent = t.email;
+      a.href = t.email.includes('@') ? `mailto:${t.email}` : '#';
+    });
+  }
+}
+
 /* ─────────── Arranque ─────────── */
 
 // Deja un primer registro en el historial para que la flecha "atrás" tenga
-// a dónde volver desde el principio (ver ir()/popstate más arriba).
+// a dónde volver desde el principio (ver ir()/popstate más arriba). Si se
+// entra con un enlace directo a una vista que no necesita caso (por ejemplo
+// negolab.es/#privacidad o #competicion), se abre esa vista.
+const vistaDelEnlace = (location.hash || '').slice(1);
 history.replaceState({ vista: 'inicio' }, '', '#inicio');
+rellenarTitular();
+if (vistaDelEnlace !== 'inicio' && VISTAS_DIRECTAS.includes(vistaDelEnlace)) ir(vistaDelEnlace);
 
 if (!API || API.includes('PON-AQUI')) {
   document.body.insertAdjacentHTML(
