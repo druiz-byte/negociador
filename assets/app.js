@@ -479,7 +479,11 @@ function entrarEnLaSala() {
     !estado.terminada &&
     estado.sesionCasoId === estado.caso.id &&
     estado.sesionRolId === estado.rolId &&
-    estado.sesionCompite === compite;
+    estado.sesionCompite === compite &&
+    // Si se ha cambiado la dureza o el modo, es otra negociación: reanudar la
+    // anterior con otra configuración rompería la firma y no podría puntuar.
+    estado.sesionDureza === estado.config.dureza &&
+    estado.sesionModo === (compite ? 'contraparte' : estado.config.modo);
   if (esLaMismaSesion) { ir('sala'); iniciarAvatar(); return; }
 
   estado.mensajes = [];
@@ -489,6 +493,8 @@ function entrarEnLaSala() {
   estado.sesionRolId = estado.rolId;
   estado.sesionCompite = compite;
   if (compite) estado.config.modo = 'contraparte';
+  estado.sesionDureza = estado.config.dureza;
+  estado.sesionModo = estado.config.modo;
   const ins = leerInscripcion();
   $('#sala-competicion-fila').classList.toggle('oculto', !compite);
   $('#sala-competicion').textContent = compite && ins ? ins.codigo : '—';
