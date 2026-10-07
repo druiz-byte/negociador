@@ -1,15 +1,6 @@
 <!doctype html>
 <html lang="es">
 <head>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-4LYE7GV8KP"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-4LYE7GV8KP');
-</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Negociador Implacable — simulador de negociación para directivos</title>
@@ -29,6 +20,7 @@
       <button data-ir="inicio">Inicio</button>
       <button data-ir="casos">Casos</button>
       <button data-ir="preparacion">Preparación</button>
+      <button data-ir="competicion" id="nav-competicion">Competición</button>
       <button data-ir="marco">El marco</button>
     </nav>
   </div>
@@ -157,6 +149,11 @@
       </div>
     </div>
 
+    <div class="bloque oculto" id="bloque-competicion">
+      <h3>Competición</h3>
+      <div id="competicion-config"></div>
+    </div>
+
     <div class="barra-accion">
       <button class="boton" id="btn-empezar" disabled>Ver mi briefing</button>
       <span class="nota" id="nota-config">Elige primero tu papel.</span>
@@ -206,6 +203,7 @@
           <div class="dato"><span>Dureza</span><span id="sala-dureza">—</span></div>
           <div class="dato"><span>Perfil</span><span id="sala-color">—</span></div>
           <div class="dato"><span>Intervenciones</span><span id="sala-turnos">0</span></div>
+          <div class="dato oculto" id="sala-competicion-fila"><span>Competición</span><span id="sala-competicion">—</span></div>
         </div>
         <div class="bloque">
           <h3>Tus objetivos</h3>
@@ -246,7 +244,8 @@
   <div class="contenedor">
     <h2>Hoja de preparación</h2>
     <p class="ayuda" style="color:var(--tenue);max-width:64ch">
-      Se guarda sola en tu navegador. Nada de esto sale de tu ordenador.
+      Se guarda sola en tu navegador. Solo sale de tu ordenador si participas en una competición:
+      entonces se envía junto con tu negociación, al terminar, para que el evaluador la tenga en cuenta.
       <span class="guardado" id="aviso-guardado">Guardado</span>
     </p>
 
@@ -415,16 +414,301 @@
   </div>
 </section>
 
+<!-- ══════════ COMPETICIÓN ══════════ -->
+<section id="vista-competicion" class="vista">
+  <div class="contenedor">
+    <h2>Competición</h2>
+    <p class="ayuda" style="color:var(--tenue);max-width:64ch">
+      Tu profesor te da un código de grupo. Apúntate con tu nombre o con un alias, negocia, y tu
+      puntuación entra en el ranking de tu grupo. Solo ven el ranking quienes tienen el código.
+    </p>
+
+    <div class="aviso info oculto" id="comp-no-disponible">
+      La competición no está disponible en este momento. El simulador funciona con normalidad;
+      solo el ranking está desactivado.
+    </div>
+
+    <div class="dos-columnas" id="comp-cuerpo">
+      <div class="bloque">
+        <h3 id="comp-titulo-inscripcion">Apúntate</h3>
+        <div id="comp-estado"></div>
+        <form id="form-competicion" autocomplete="off">
+          <div class="campo">
+            <label for="comp-codigo">Código del grupo<span class="pista">Te lo da tu profesor, por ejemplo NEG-4K7PQX</span></label>
+            <input type="text" id="comp-codigo" maxlength="24" required style="text-transform:uppercase">
+          </div>
+          <div class="campo">
+            <label for="comp-nombre">Tu nombre o un alias<span class="pista">Es lo que verá tu grupo en el ranking. Entre 2 y 40 caracteres.</span></label>
+            <input type="text" id="comp-nombre" maxlength="40" required>
+          </div>
+          <label class="casilla">
+            <input type="checkbox" id="comp-consentimiento" required>
+            <span>He leído <a href="#" data-desplazar="reglas-competicion">cómo se puntúa</a> y la
+            <a href="#privacidad" data-ir="privacidad">política de privacidad</a>, y acepto que mi nombre o alias, mi papel,
+            el caso, la dureza, si rellené la hoja de preparación y mis puntos se muestren en el ranking de este grupo.
+            Mi informe y mi hoja solo podremos descargarlos yo y el profesor.</span>
+          </label>
+          <div class="barra-accion" style="margin-top:16px">
+            <button class="boton" type="submit" id="btn-comp-entrar">Entrar en la competición</button>
+            <span class="nota" id="nota-competicion"></span>
+          </div>
+        </form>
+      </div>
+
+      <div class="bloque" id="reglas-competicion">
+        <h3>Cómo se puntúa</h3>
+        <p class="formula">Puntos = (Rúbrica + Resultado) × Factor de dureza</p>
+        <div class="prosa">
+          <table>
+            <tr><td><strong>Rúbrica</strong><br><small>máx. 40</small></td><td>Las ocho dimensiones del <a href="#marco" data-ir="marco">marco</a>, de 1 a 5 cada una. Cada nota va con una cita literal de lo que dijiste.</td></tr>
+            <tr><td><strong>Resultado</strong><br><small>máx. 20</small></td><td>Qué parte del valor disponible capturaste en el acuerdo: entre tu mínimo (0 %) y tu óptimo (100 %), ponderado por la importancia de cada variable. Se multiplica por 20. <strong>Sin acuerdo completo, 0.</strong></td></tr>
+            <tr><td><strong>Factor de dureza</strong></td><td>1 · Colaborativo ×1,00 · 2 · Firme ×1,10 · 3 · Implacable ×1,25 · 4 · Hostil ×1,40</td></tr>
+          </table>
+          <p>Máximo posible: (40 + 20) × 1,40 = <strong>84 puntos</strong>.</p>
+          <ul>
+            <li><strong>Quién evalúa.</strong> Al pulsar «Fin de la simulación», un evaluador independiente (una IA distinta de la contraparte, con la rúbrica y las fichas de ambas partes) lee la conversación completa y pone las notas. La contraparte no puntúa, y nada de lo que le digas durante la negociación cambia las reglas del evaluador.</li>
+            <li><strong>Hoja de preparación.</strong> No suma puntos por sí misma: el evaluador la usa como evidencia en «Preparación y objetivos». En el ranking aparece «Sí» si tiene rellenos al menos la mitad de sus campos.</li>
+            <li><strong>Condiciones iguales para todos.</strong> En competición la simulación juega solo como contraparte, sin coach ni tiempo muerto. Hacen falta al menos tres intervenciones tuyas.</li>
+            <li><strong>Cada negociación puntúa una vez.</strong> Puedes repetir todas las veces que quieras; el ranking puede mostrar todos los intentos o solo el mejor de cada persona.</li>
+            <li><strong>La conversación va firmada.</strong> El servidor comprueba que la negociación evaluada es exactamente la que tuvo lugar.</li>
+            <li><strong>Es una evaluación automática.</strong> Puede equivocarse. El profesor puede revisar cualquier informe y anular resultados.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="bloque oculto" id="comp-ranking-bloque">
+      <h3>Ranking <small id="rk-grupo"></small></h3>
+      <div class="controles-ranking">
+        <select id="rk-caso" aria-label="Filtrar por caso"><option value="">Todos los casos</option></select>
+        <select id="rk-rol" aria-label="Filtrar por papel"><option value="">Todos los papeles</option></select>
+        <label class="casilla en-linea"><input type="checkbox" id="rk-mejor" checked> <span>Solo el mejor intento de cada persona</span></label>
+        <button class="boton fantasma" id="rk-actualizar" type="button">Actualizar</button>
+      </div>
+      <div id="rk-tabla"></div>
+      <p class="ayuda" style="margin-top:12px">Las descargas solo aparecen en tus propios resultados, y solo en el navegador desde el que negociaste.
+        Si quieres conservarlos, descárgalos al terminar.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ PROFESOR ══════════ -->
+<section id="vista-profesor" class="vista">
+  <div class="contenedor">
+    <h2>Panel del profesor</h2>
+    <div class="aviso info oculto" id="prof-no-disponible">La competición no está disponible en este servidor.</div>
+
+    <form class="bloque" id="prof-login" autocomplete="off">
+      <h3>Acceso</h3>
+      <div class="campo">
+        <label for="prof-clave">Clave del profesor<span class="pista">La que pusiste en ADMIN_CLAVE en Render. Se olvida al cerrar la pestaña.</span></label>
+        <input type="password" id="prof-clave" required autocomplete="current-password">
+      </div>
+      <div class="barra-accion">
+        <button class="boton" type="submit">Entrar</button>
+        <span class="nota" id="nota-prof-login"></span>
+      </div>
+    </form>
+
+    <div id="prof-panel" class="oculto">
+      <form class="bloque" id="prof-crear" autocomplete="off">
+        <h3>Crear un grupo</h3>
+        <div class="dos-columnas">
+          <div class="campo">
+            <label for="prof-grupo-nombre">Nombre<span class="pista">Por ejemplo «EMBA 2026 · grupo A»</span></label>
+            <input type="text" id="prof-grupo-nombre" maxlength="40" required>
+          </div>
+          <div class="campo">
+            <label for="prof-grupo-codigo">Código (opcional)<span class="pista">Si lo dejas vacío se genera uno difícil de adivinar</span></label>
+            <input type="text" id="prof-grupo-codigo" maxlength="24" style="text-transform:uppercase">
+          </div>
+        </div>
+        <div class="barra-accion">
+          <button class="boton" type="submit">Crear grupo</button>
+          <span class="nota" id="nota-prof-crear"></span>
+        </div>
+      </form>
+
+      <div class="bloque">
+        <h3>Grupos</h3>
+        <div id="prof-grupos"></div>
+      </div>
+
+      <div class="bloque oculto" id="prof-resultados-bloque">
+        <h3>Resultados <small id="prof-resultados-grupo"></small></h3>
+        <div class="barra-accion" style="margin-bottom:14px">
+          <button class="boton secundario" type="button" id="prof-csv">Exportar a CSV</button>
+        </div>
+        <div id="prof-resultados"></div>
+      </div>
+
+      <button class="boton fantasma" type="button" id="prof-salir">Salir del panel</button>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ AVISO LEGAL ══════════ -->
+<section id="vista-aviso-legal" class="vista">
+  <div class="contenedor legal prosa">
+    <h2>Aviso legal</h2>
+    <h3>Titular del sitio</h3>
+    <p>Este sitio web (<strong>negolab.es</strong>) lo gestiona a título personal
+      <strong data-titular="nombre">[NOMBRE Y APELLIDOS]</strong>. Contacto:
+      <a data-titular="email" href="#">[EMAIL DE CONTACTO]</a>.</p>
+    <h3>Objeto</h3>
+    <p>Negociador Implacable es un simulador docente y gratuito para entrenar habilidades de negociación.
+      No tiene finalidad comercial ni requiere registro.</p>
+    <h3>Contenido generado por inteligencia artificial</h3>
+    <p>La contraparte de la negociación y el evaluador de la competición son modelos de inteligencia
+      artificial. Sus respuestas, notas e informes se generan automáticamente, pueden contener errores y
+      tienen un fin exclusivamente formativo: no constituyen asesoramiento profesional de ningún tipo.</p>
+    <h3>Casos</h3>
+    <p>Las empresas, personas y situaciones de los casos son ficticias. Cualquier parecido con la realidad es
+      casual.</p>
+    <h3>Propiedad intelectual</h3>
+    <p>Los textos, casos, rúbrica y diseño del sitio pertenecen a su titular, salvo las librerías de terceros
+      que se usan con sus propias licencias. Puedes usarlos para tu formación; para reproducirlos o
+      distribuirlos con otros fines, pide permiso.</p>
+    <h3>Uso adecuado</h3>
+    <p>No está permitido usar el simulador para fines distintos del entrenamiento, intentar acceder a las
+      fichas confidenciales, manipular la evaluación ni usar nombres o alias ofensivos. El titular puede
+      retirar del ranking cualquier resultado que incumpla estas normas.</p>
+    <h3>Legislación aplicable</h3>
+    <p>Este sitio se rige por la legislación española.</p>
+  </div>
+</section>
+
+<!-- ══════════ PRIVACIDAD ══════════ -->
+<section id="vista-privacidad" class="vista">
+  <div class="contenedor legal prosa">
+    <h2>Política de privacidad</h2>
+    <p>Última actualización: octubre de 2026.</p>
+
+    <h3>Quién es el responsable</h3>
+    <p><strong data-titular="nombre">[NOMBRE Y APELLIDOS]</strong>, titular de negolab.es. Puedes escribir a
+      <a data-titular="email" href="#">[EMAIL DE CONTACTO]</a> para cualquier cuestión sobre tus datos.</p>
+
+    <h3>Qué datos se tratan, para qué y con qué base</h3>
+    <table>
+      <thead><tr><th>Cuándo</th><th>Qué datos</th><th>Para qué</th><th>Base jurídica</th></tr></thead>
+      <tbody>
+        <tr><td>Al negociar</td><td>Lo que escribes en la sala</td><td>Generar las respuestas de la contraparte. No se guarda en nuestro servidor.</td><td>Prestarte el servicio que pides</td></tr>
+        <tr><td>Avatar de vídeo</td><td>El texto de la contraparte (no tu voz ni tu imagen)</td><td>Ponerle cara y voz</td><td>Prestarte el servicio que pides</td></tr>
+        <tr><td>Hoja de preparación</td><td>Lo que escribes en ella</td><td>Se guarda solo en tu navegador. Si compites, se envía con tu negociación para el evaluador</td><td>Tu consentimiento (al competir)</td></tr>
+        <tr><td>Competición</td><td>Nombre o alias, código de grupo, caso, papel, dureza, puntos, informe de evaluación (con citas literales de tus intervenciones) y hoja de preparación</td><td>Evaluarte y mostrar el ranking de tu grupo</td><td>Tu consentimiento</td></tr>
+        <tr><td>Analítica</td><td>Datos de navegación de Google Analytics</td><td>Saber cuánto se usa la web</td><td>Tu consentimiento (solo si aceptas)</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Consejo:</strong> no escribas en la negociación datos personales reales ni información confidencial
+      de tu empresa. No hacen falta: los casos son ficticios.</p>
+
+    <h3>Quién ve tus datos de la competición</h3>
+    <ul>
+      <li><strong>Tu grupo</strong> (quien tenga el código): tu nombre o alias, papel, caso, dureza, si rellenaste la hoja y tus puntos.</li>
+      <li><strong>Solo tú</strong> (desde el navegador en el que negociaste) <strong>y el profesor</strong>: tu informe y tu hoja de preparación.</li>
+    </ul>
+    <p>No se guarda tu correo, tu dirección IP ni ninguna cuenta. Usa un alias si prefieres no aparecer con tu nombre.</p>
+
+    <h3>Proveedores que intervienen</h3>
+    <ul>
+      <li><strong>Anthropic</strong> (Claude): genera las respuestas de la contraparte y la evaluación.</li>
+      <li><strong>anam.ai</strong>: genera la voz y el vídeo del avatar.</li>
+      <li><strong>Render</strong>: aloja el servidor que conecta la web con los anteriores.</li>
+      <li><strong>Neon</strong>: aloja la base de datos de la competición.</li>
+      <li><strong>GitHub Pages</strong>: aloja la web.</li>
+      <li><strong>Google</strong>: Analytics, solo si lo aceptas. Además, si usas el dictado por voz en Chrome,
+        el navegador envía el audio a Google para transcribirlo; este sitio no recibe ese audio.</li>
+    </ul>
+    <p>Algunos de estos proveedores están fuera del Espacio Económico Europeo, sobre todo en Estados Unidos.
+      Esas transferencias se amparan en las garantías que cada proveedor ofrece conforme al RGPD (decisión de
+      adecuación o cláusulas contractuales tipo). Los proveedores pueden conservar temporalmente lo que
+      procesan según sus propias políticas.</p>
+
+    <h3>Cuánto tiempo se guardan</h3>
+    <p>Los resultados de la competición se borran cuando tú o el profesor los eliminéis y, en todo caso,
+      automáticamente a los 12 meses. Las conversaciones no se guardan en nuestro servidor.</p>
+
+    <h3>Tus derechos</h3>
+    <p>Puedes acceder a tus datos, rectificarlos, suprimirlos, oponerte a su tratamiento, limitarlo, pedir su
+      portabilidad y retirar tu consentimiento en cualquier momento, escribiendo a
+      <a data-titular="email" href="#">[EMAIL DE CONTACTO]</a>. Además, puedes <strong>borrar tú mismo tu
+      resultado</strong> desde el ranking, y tu hoja de preparación desde la propia hoja. Si crees que no se
+      han respetado tus derechos, puedes reclamar ante la Agencia Española de Protección de Datos
+      (<a href="https://www.aepd.es" target="_blank" rel="noopener">aepd.es</a>).</p>
+
+    <h3>Inteligencia artificial</h3>
+    <p>Durante toda la simulación hablas con un sistema de inteligencia artificial, no con una persona. La
+      puntuación de la competición también la calcula un sistema de IA, con las reglas publicadas en la
+      sección «Competición», y el profesor puede revisarla.</p>
+
+    <h3>Destinatarios del servicio</h3>
+    <p>El simulador está pensado para profesionales y estudiantes adultos.</p>
+  </div>
+</section>
+
+<!-- ══════════ COOKIES ══════════ -->
+<section id="vista-cookies" class="vista">
+  <div class="contenedor legal prosa">
+    <h2>Política de cookies</h2>
+    <p>Este sitio usa almacenamiento en tu navegador para funcionar y, solo si lo aceptas, cookies de
+      analítica de Google Analytics.</p>
+    <table>
+      <thead><tr><th>Nombre</th><th>Tipo</th><th>Para qué</th><th>Duración</th></tr></thead>
+      <tbody>
+        <tr><td>negociador-cookies-v1</td><td>Técnica (almacenamiento local)</td><td>Recordar tu elección sobre cookies</td><td>12 meses</td></tr>
+        <tr><td>negociador-preparacion-v1</td><td>Técnica (almacenamiento local)</td><td>Guardar tu hoja de preparación</td><td>Hasta que la borres</td></tr>
+        <tr><td>negociador-competicion-v1, negociador-mis-resultados-v1</td><td>Técnica (almacenamiento local)</td><td>Recordar tu grupo y poder descargar tus propios informes</td><td>Hasta que salgas del grupo o borres los datos del navegador</td></tr>
+        <tr><td>_ga, _ga_*</td><td>Analítica (Google Analytics)</td><td>Contar visitas y saber qué secciones se usan</td><td>Hasta 2 años. <strong>Solo con tu consentimiento</strong></td></tr>
+      </tbody>
+    </table>
+    <p>Las técnicas son imprescindibles para que la web funcione y no necesitan consentimiento. Las de
+      analítica no se instalan hasta que aceptas.</p>
+    <p><button class="boton secundario" type="button" data-abrir-cookies>Cambiar mi elección sobre cookies</button></p>
+    <p>También puedes borrarlas desde la configuración de tu navegador.</p>
+  </div>
+</section>
+
 </main>
 
 <footer class="principal">
   <div class="contenedor">
-    <div>Negociador Implacable · simulador docente de negociación</div>
-    <div>Las empresas y situaciones de los casos son ficción con fines formativos.</div>
+    <div>
+      <div>Negociador Implacable · simulador docente de negociación</div>
+      <div>Las empresas y situaciones de los casos son ficción con fines formativos. La contraparte es una inteligencia artificial.</div>
+    </div>
+    <nav class="pie-enlaces" aria-label="Información legal">
+      <a href="#aviso-legal" data-ir="aviso-legal">Aviso legal</a>
+      <a href="#privacidad" data-ir="privacidad">Privacidad</a>
+      <a href="#cookies" data-ir="cookies">Cookies</a>
+      <a href="#" data-abrir-cookies>Configurar cookies</a>
+      <a href="#profesor" data-ir="profesor">Acceso profesor</a>
+    </nav>
   </div>
 </footer>
 
+<!-- Puerta de entrada: aviso de IA y elección sobre cookies (assets/cookies.js).
+     Pide una decisión antes de usar el sitio, pero "Rechazar" deja entrar
+     igual que "Aceptar": no es un muro de cookies. -->
+<div class="puerta oculto" id="puerta" role="dialog" aria-modal="true" aria-labelledby="puerta-titulo">
+  <div class="puerta-caja">
+    <h2 id="puerta-titulo">Antes de empezar</h2>
+    <p><strong>Vas a negociar con una inteligencia artificial.</strong> La contraparte, el avatar y el evaluador
+      de la competición son sistemas de IA: sus respuestas y notas se generan automáticamente y pueden
+      contener errores. Lo que escribes se envía a nuestros proveedores para generar las respuestas;
+      no escribas datos personales ni información confidencial real.</p>
+    <p><strong>Cookies.</strong> Usamos almacenamiento técnico imprescindible (por ejemplo, para guardar tu hoja de
+      preparación) y, solo si lo aceptas, cookies de Google Analytics para saber cuánto se usa la web.</p>
+    <p class="puerta-enlaces">Más información en la <a href="#privacidad" data-ir="privacidad">política de privacidad</a>,
+      la <a href="#cookies" data-ir="cookies">política de cookies</a> y el <a href="#aviso-legal" data-ir="aviso-legal">aviso legal</a>.</p>
+    <div class="puerta-botones">
+      <button class="boton" type="button" id="puerta-aceptar">Aceptar analítica y entrar</button>
+      <button class="boton" type="button" id="puerta-rechazar">Rechazar analítica y entrar</button>
+    </div>
+  </div>
+</div>
+
 <script src="assets/config.js"></script>
+<script src="assets/cookies.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
