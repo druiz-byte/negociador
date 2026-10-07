@@ -311,3 +311,108 @@ footer.principal {
 footer.principal .contenedor { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 
 .oculto { display: none !important; }
+
+/* ─── Navegación en móvil ─── */
+
+@media (max-width: 760px) {
+  header.principal .contenedor { height: auto; flex-wrap: wrap; padding-top: 10px; padding-bottom: 6px; gap: 6px; }
+  nav.principal { width: 100%; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  nav.principal::-webkit-scrollbar { display: none; }
+  nav.principal button { flex: none; padding: 6px 10px; }
+  .contenedor { padding: 0 16px; }
+}
+
+/* ─── Pie ─── */
+
+.pie-enlaces { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: flex-start; }
+.pie-enlaces a { color: var(--tenue); text-decoration: none; }
+.pie-enlaces a:hover { color: var(--acento); }
+
+/* ─── Puerta de entrada (aviso de IA y cookies) ─── */
+
+.puerta {
+  position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+  background: rgba(5, 7, 10, .78); backdrop-filter: blur(3px); padding: 16px;
+}
+.puerta-caja {
+  background: var(--fondo-2); border: 1px solid var(--borde); border-radius: 14px;
+  max-width: 600px; width: 100%; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  max-height: calc(100vh - 32px); overflow-y: auto;
+}
+.puerta-caja h2 { font-size: 1.35rem; }
+.puerta-caja p { color: var(--tenue); font-size: .93rem; }
+.puerta-caja p strong { color: var(--texto); }
+.puerta-enlaces { font-size: .86rem !important; }
+.puerta-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+.puerta-botones .boton { width: 100%; }
+body.puerta-abierta { overflow: hidden; }
+
+/* En las páginas legales: barra inferior que deja leer la página. */
+body.puerta-discreta .puerta { inset: auto 0 0 0; background: none; backdrop-filter: none; padding: 0; }
+body.puerta-discreta .puerta-caja {
+  max-width: none; border-radius: 0; border-width: 1px 0 0; padding: 14px 24px; box-shadow: 0 -10px 30px rgba(0,0,0,.4);
+}
+body.puerta-discreta .puerta-caja h2,
+body.puerta-discreta .puerta-caja p:not(:first-of-type) { display: none; }
+body.puerta-discreta .puerta-caja p { margin: 0; font-size: .85rem; }
+body.puerta-discreta .puerta-botones { margin-top: 10px; max-width: 560px; }
+body.puerta-discreta footer.principal { padding-bottom: 180px; }
+
+@media (max-width: 560px) {
+  .puerta-botones { grid-template-columns: 1fr; }
+  .puerta-caja { padding: 20px; }
+}
+
+/* ─── Páginas legales ─── */
+
+.legal { max-width: 820px; }
+.legal h3 { margin-top: 1.6em; }
+.legal p, .legal li { color: #c9ced7; }
+.legal table { display: block; overflow-x: auto; }
+
+/* ─── Formularios ─── */
+
+.casilla { display: flex; gap: 10px; align-items: flex-start; font-size: .88rem; color: var(--tenue); cursor: pointer; }
+.casilla input { margin-top: 4px; accent-color: var(--acento); flex: none; width: 16px; height: 16px; }
+.casilla.en-linea { align-items: center; }
+.casilla.en-linea input { margin-top: 0; }
+input[type="password"] {
+  width: 100%; background: var(--fondo); border: 1px solid var(--borde); color: var(--texto);
+  border-radius: 7px; padding: 10px 12px; font: inherit;
+}
+
+/* ─── Competición ─── */
+
+.formula {
+  font-weight: 650; color: var(--acento); background: var(--acento-suave); border-radius: 8px;
+  padding: 10px 14px; margin: 0 0 6px; font-size: .98rem;
+}
+.inscripcion-activa {
+  border: 1px solid rgba(127,200,169,.35); background: rgba(127,200,169,.08); color: var(--texto);
+  border-radius: 8px; padding: 12px 14px; font-size: .92rem; margin-bottom: 14px;
+}
+.inscripcion-activa strong { color: var(--verde); }
+.controles-ranking { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.controles-ranking select { width: auto; min-width: 180px; }
+.tabla-desplazable { overflow-x: auto; }
+table.ranking { width: 100%; border-collapse: collapse; font-size: .88rem; }
+table.ranking th, table.ranking td { border-bottom: 1px solid var(--borde); padding: 9px 8px; text-align: left; vertical-align: middle; }
+table.ranking th { color: var(--tenue); font-weight: 600; font-size: .76rem; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+table.ranking td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.ranking td.pos { font-weight: 700; color: var(--tenue); width: 38px; }
+table.ranking tr.podio-1 td.pos { color: #f1c75b; }
+table.ranking tr.podio-2 td.pos { color: #c9d1dc; }
+table.ranking tr.podio-3 td.pos { color: #d39a6a; }
+table.ranking tr.mio td { background: var(--acento-suave); }
+table.ranking td.puntos { font-weight: 700; color: var(--acento); font-size: .98rem; }
+table.ranking .acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+table.ranking .acciones button { font-size: .76rem; padding: 4px 9px; }
+.vacio { color: var(--tenue); font-size: .9rem; padding: 10px 0; }
+.competicion-config .opcion { cursor: default; }
+.resultado-competicion {
+  border: 1px solid rgba(224,164,88,.45); background: var(--acento-suave); border-radius: 10px;
+  padding: 14px 16px; margin-top: 14px;
+}
+.resultado-competicion .cifra { font-size: 1.8rem; font-weight: 700; color: var(--acento); line-height: 1.1; }
+.opcion:disabled { opacity: .4; cursor: not-allowed; }
+.opcion:disabled:hover { border-color: var(--borde); }

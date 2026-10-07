@@ -9,3 +9,12 @@
  * Es lo único que hay que tocar de la web una vez desplegado el servidor.
  */
 window.NEGOCIADOR_API = 'https://negociador-tabs.onrender.com';
+
+/**
+ * Titular del sitio, para el aviso legal y la política de privacidad.
+ * Se rellena en todos los sitios donde aparece con data-titular="...".
+ */
+window.NEGOCIADOR_TITULAR = {
+  nombre: 'David Ruiz de Olano',
+  email: 'druizdeolano@gmail.com',
+};
