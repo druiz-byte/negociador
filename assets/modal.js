@@ -1,9 +1,13 @@
-/* Negociador Implacable — ventana emergente con la rúbrica.
+/* Negociador Implacable — ventanas emergentes de consulta.
 
-   En la página de Competición, el enlace «marco» (data-abrir-rubrica) abre
-   esta ventana en lugar de navegar a la sección «El marco», para que el
-   participante consulte cómo se puntúa sin perder lo que estaba haciendo.
-   Se cierra con la ×, con el botón «Entendido», con Esc o pulsando fuera. */
+   Dos ventanas, para consultar las reglas sin perder lo que se está haciendo:
+   - La rúbrica: el enlace «marco» de las reglas de competición
+     (data-abrir-rubrica), en vez de navegar a la sección «El marco».
+   - Cómo se puntúa: el enlace del bloque de competición del configurador
+     (data-desplazar-reglas), en vez de saltar a la página de Competición.
+     Su contenido se copia de las reglas publicadas en esa página
+     (#reglas-competicion), así que no hay dos versiones que mantener.
+   Se cierran con la ×, con el botón «Entendido», con Esc o pulsando fuera. */
 
 (function () {
   const DIMENSIONES = [
@@ -52,6 +56,9 @@
     .modal-rubrica td small { color: var(--tenue); display: block; margin-top: 2px; }
     .modal-rubrica .nota-baja { color: #f0a9a4; }
     .modal-rubrica .nota-alta { color: var(--verde); }
+    .modal-rubrica .formula { font-weight: 650; color: var(--acento); background: var(--acento-suave); border-radius: 8px;
+      padding: 10px 14px; margin: 0 0 12px; }
+    .modal-rubrica .prosa table td small { display: inline; }
     .modal-rubrica .pie { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 18px; }
     body.modal-abierto { overflow: hidden; }
     @media (max-width: 640px) {
@@ -63,23 +70,39 @@
       .modal-rubrica td:first-child { border-top-width: 1px; background: var(--superficie); }
     }`;
 
-  let modal = null;
+  const modales = {};
+  let abierto = null;
   let anteriorFoco = null;
 
-  function construir() {
-    const s = document.createElement('style');
-    s.textContent = ESTILO;
-    document.head.appendChild(s);
-
-    modal = document.createElement('div');
-    modal.className = 'modal-rubrica oculto';
-    modal.setAttribute('role', 'dialog');
-    modal.setAttribute('aria-modal', 'true');
-    modal.setAttribute('aria-labelledby', 'modal-rubrica-titulo');
-    modal.innerHTML = `
+  function crear(id, titulo, cuerpo) {
+    if (!document.getElementById('estilo-modales')) {
+      const s = document.createElement('style');
+      s.id = 'estilo-modales';
+      s.textContent = ESTILO;
+      document.head.appendChild(s);
+    }
+    const m = document.createElement('div');
+    m.className = 'modal-rubrica oculto';
+    m.setAttribute('role', 'dialog');
+    m.setAttribute('aria-modal', 'true');
+    m.setAttribute('aria-labelledby', `${id}-titulo`);
+    m.innerHTML = `
       <div class="caja">
         <button class="cerrar" type="button" aria-label="Cerrar" data-cerrar-modal>×</button>
-        <h2 id="modal-rubrica-titulo">Las ocho dimensiones de la rúbrica</h2>
+        <h2 id="${id}-titulo">${titulo}</h2>
+        ${cuerpo}
+      </div>`;
+    document.body.appendChild(m);
+    // Pulsar fuera de la caja cierra; los botones con data-cerrar-modal también
+    // (el de «Ver el marco completo» además navega, gracias a su data-ir).
+    m.addEventListener('click', (e) => {
+      if (e.target === m || e.target.closest('[data-cerrar-modal]')) cerrar();
+    });
+    return m;
+  }
+
+  function construirRubrica() {
+    return crear('modal-rubrica', 'Las ocho dimensiones de la rúbrica', `
         <p class="intro">Cada dimensión se puntúa de 1 a 5 (máximo 40) y cada nota va acompañada de una cita
           literal de lo que dijiste. Sin evidencia, la nota es baja.</p>
         <table>
@@ -92,35 +115,52 @@
         <div class="pie">
           <button class="boton fantasma" type="button" data-ir="marco" data-cerrar-modal>Ver el marco completo</button>
           <button class="boton" type="button" data-cerrar-modal>Entendido</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-
-    // Pulsar fuera de la caja cierra; los botones con data-cerrar-modal también
-    // (el de «Ver el marco completo» además navega, gracias a su data-ir).
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal || e.target.closest('[data-cerrar-modal]')) cerrar();
-    });
+        </div>`);
   }
 
-  function abrir() {
-    if (!modal) construir();
-    anteriorFoco = document.activeElement;
-    modal.classList.remove('oculto');
+  function construirPuntuacion() {
+    const reglas = document.getElementById('reglas-competicion');
+    const copia = reglas ? reglas.cloneNode(true) : document.createElement('div');
+    copia.removeAttribute('id');
+    const h = copia.querySelector('h3');
+    if (h) h.remove();
+    return crear('modal-puntuacion', 'Cómo se puntúa', `
+        ${copia.innerHTML}
+        <div class="pie">
+          <button class="boton" type="button" data-cerrar-modal>Entendido</button>
+        </div>`);
+  }
+
+  function abrir(cual) {
+    if (!modales[cual]) modales[cual] = cual === 'rubrica' ? construirRubrica() : construirPuntuacion();
+    // Si hay otra ventana abierta (p. ej. «marco» desde «Cómo se puntúa»), se cambia de una a otra.
+    if (abierto && abierto !== modales[cual]) abierto.classList.add('oculto');
+    else anteriorFoco = document.activeElement;
+    abierto = modales[cual];
+    abierto.classList.remove('oculto');
     document.body.classList.add('modal-abierto');
-    modal.querySelector('.cerrar').focus();
+    abierto.querySelector('.cerrar').focus();
   }
 
   function cerrar() {
-    if (!modal || modal.classList.contains('oculto')) return;
-    modal.classList.add('oculto');
+    if (!abierto) return;
+    abierto.classList.add('oculto');
+    abierto = null;
     document.body.classList.remove('modal-abierto');
     if (anteriorFoco && anteriorFoco.focus) anteriorFoco.focus();
   }
 
+  // El enlace «Cómo se puntúa» del configurador lo pinta app.js con su propio
+  // manejador (que saltaba a la página de Competición). Lo interceptamos en la
+  // fase de captura, antes de que llegue a ese manejador, para abrir la ventana.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-desplazar-reglas]');
+    if (a) { e.preventDefault(); e.stopPropagation(); abrir('puntuacion'); }
+  }, true);
+
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-abrir-rubrica]');
-    if (a) { e.preventDefault(); abrir(); }
+    if (a) { e.preventDefault(); abrir('rubrica'); }
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar(); });
 })();
