@@ -3,22 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Negociador Implacable — simulador de negociación para directivos</title>
-<meta name="description" content="Entrena habilidades de negociación comercial, de compras y de gestión de proyectos en una simulación que negocia en serio: con límites confidenciales, tácticas y un informe de evaluación al final.">
-<meta property="og:title" content="Negociador Implacable">
-<meta property="og:description" content="Simulador de negociación para directivos. Elige el caso, el papel de la simulación y la dureza. Negocia. Recibe tu evaluación.">
+<title>NegoLab · Tecnobit — Operación Punto Crítico</title>
+<meta name="description" content="Simulación de negociación para Tecnobit: el Director de Programa de un cliente estratégico del sector defensa exige más por menos. Prepárate, negocia y recibe tu feedback.">
+<meta property="og:title" content="NegoLab · Tecnobit — Operación Punto Crítico">
+<meta property="og:description" content="Negocia con el Director de Programa de un cliente estratégico de defensa. Feedback por competencias y ranking por grupo.">
+<meta name="theme-color" content="#31567a">
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="assets/estilos.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23e0a458'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2331567a'/><path d='M9 24 L23 8' stroke='%235ea4c5' stroke-width='3.5' stroke-linecap='round'/><path d='M8 13 L24 11' stroke='%23ffffff' stroke-width='3' stroke-linecap='round'/></svg>">
 </head>
 <body>
 
 <header class="principal">
   <div class="contenedor">
-    <div class="marca" data-ir="inicio"><span class="punto"></span> Negociador Implacable</div>
+    <div class="marca" data-ir="inicio" title="Inicio">
+      <img class="logo" src="assets/tecnobit-logo.svg" alt="Tecnobit · Grupo Oesía" width="200" height="71">
+      <span class="separador" aria-hidden="true"></span>
+      <span class="producto">Nego<b>Lab</b></span>
+    </div>
     <nav class="principal">
       <button data-ir="inicio">Inicio</button>
-      <button data-ir="casos">Casos</button>
+      <button data-ir="casos">El caso</button>
       <button data-ir="preparacion">Preparación</button>
       <button data-ir="competicion" id="nav-competicion">Competición</button>
       <button data-ir="marco">El marco</button>
@@ -32,49 +37,50 @@
 <section id="vista-inicio" class="vista activa">
   <div class="contenedor">
     <div class="hero">
-      <span class="etiqueta">Simulador de negociación</span>
-      <h1>Negocia contra alguien que<br><span class="destacado">no te lo va a poner fácil</span>.</h1>
+      <span class="etiqueta">Tecnobit · Programa de negociación</span>
+      <h1>Operación Punto Crítico:<br><span class="destacado">el cliente estratégico que exige más por menos</span>.</h1>
       <p class="entrada">
-        Una simulación que interpreta a la otra parte en serio: con sus propios objetivos, sus límites
-        confidenciales, su alternativa si no hay acuerdo y un repertorio de treinta tácticas que
-        usará contigo sin avisar. Cuando cerréis —o rompáis— te dirá exactamente dónde ganaste
-        y dónde dejaste valor sobre la mesa.
+        DEFENSYS quiere adelantar cuatro semanas la entrega del subsistema de comunicaciones tácticas,
+        añadir dos funcionalidades sin coste y blindarse con nuevas penalizaciones. Como Responsable de
+        Programa de Tecnobit, tendrás que proteger la relación sin comprometer la rentabilidad ni asumir
+        riesgos técnicos inaceptables. Al otro lado de la mesa, su Director de Programa: exigente,
+        analítico y con poco tiempo.
       </p>
       <div class="barra-accion">
-        <button class="boton" data-ir="casos">Elegir un caso</button>
-        <button class="boton secundario" data-ir="marco">Ver el marco de trabajo</button>
+        <button class="boton" data-ir="casos">Ver el caso</button>
+        <button class="boton secundario" data-ir="marco">Cómo se te evalúa</button>
       </div>
     </div>
 
     <div class="pasos">
       <div class="paso">
         <div class="num">1</div>
-        <h3>Elige el caso y tu papel</h3>
-        <p>Negociación con cliente, con proveedor o interna. Tú eliges qué lado de la mesa ocupas.</p>
+        <h3>Lee tu briefing</h3>
+        <p>Juegas como Responsable de Programa de Tecnobit. Solo ves tu información; el cliente tiene la suya.</p>
       </div>
       <div class="paso">
         <div class="num">2</div>
-        <h3>Configura la simulación</h3>
-        <p>Contraparte, evaluador o coach. Cuatro niveles de dureza.</p>
+        <h3>Prepara (10 min)</h3>
+        <p>Objetivos, límites, alternativas, concesiones y lo que pedirás a cambio, en tu hoja de preparación.</p>
       </div>
       <div class="paso">
         <div class="num">3</div>
-        <h3>Prepara</h3>
-        <p>Tu briefing confidencial y una hoja para fijar objetivos, MAAN, variables y preguntas.</p>
+        <h3>Negocia (20–25 min)</h3>
+        <p>Con el Director de Programa de DEFENSYS, en vídeo y por texto o voz. Nivel avanzado, igual para todos.</p>
       </div>
       <div class="paso">
         <div class="num">4</div>
-        <h3>Negocia y recibe el informe</h3>
-        <p>Puntuación sobre ocho dimensiones, con citas de lo que dijiste, y un plan de acción.</p>
+        <h3>Recibe tu feedback</h3>
+        <p>Ocho competencias con citas de lo que dijiste, tu momento crítico y una recomendación práctica. Y, si compites, tu puesto en el ranking.</p>
       </div>
     </div>
 
     <div class="bloque">
-      <h3>Por qué una simulación y no un compañero de curso</h3>
+      <h3>Por qué una simulación</h3>
       <p class="ayuda" style="margin-bottom:0">
-        Porque la simulación no se corta, no te conoce, no te va a dejar ganar por cortesía y no se cansa
-        de repetir el mismo caso hasta que te salga bien. Y porque recuerda todo lo que dijiste:
-        el informe final cita tus frases exactas, no impresiones.
+        Porque el cliente simulado no se corta, no te va a dejar ganar por cortesía y solo te dará
+        información si sabes preguntar. Y porque un evaluador independiente lee la conversación completa:
+        el feedback cita tus frases exactas, no impresiones.
       </p>
     </div>
   </div>
@@ -83,10 +89,10 @@
 <!-- ══════════ CASOS ══════════ -->
 <section id="vista-casos" class="vista">
   <div class="contenedor">
-    <h2>Biblioteca de casos</h2>
+    <h2>El caso</h2>
     <p class="ayuda" style="color:var(--tenue);max-width:62ch">
-      Cada caso tiene dos papeles con objetivos incompatibles y límites confidenciales.
-      Tú ves solo tu mitad; la simulación juega la otra.
+      Todos los participantes juegan el mismo papel, contra el mismo interlocutor y al mismo nivel.
+      Tú ves solo tu información; el cliente tiene sus propios objetivos y límites confidenciales.
     </p>
     <div class="filtros" id="filtros"></div>
     <div class="rejilla" id="lista-casos"></div>
@@ -96,16 +102,19 @@
 <!-- ══════════ CONFIGURAR ══════════ -->
 <section id="vista-configurar" class="vista">
   <div class="contenedor">
-    <button class="boton fantasma" data-ir="casos" style="margin-bottom:20px">← Volver a los casos</button>
+    <button class="boton fantasma" data-ir="casos" style="margin-bottom:20px">← Volver al caso</button>
     <h2 id="config-titulo">Configura la simulación</h2>
     <p class="ayuda" style="color:var(--tenue)" id="config-sub"></p>
 
     <div class="bloque">
-      <h3>Tu papel <small>eliges un lado; la simulación juega el otro</small></h3>
+      <h3 id="titulo-rol">La mesa</h3>
       <div class="opciones" id="opciones-rol"></div>
     </div>
 
-    <div class="bloque">
+    <!-- Modo y dureza: en el caso Tecnobit vienen fijados por el servidor
+         (contraparte, nivel 3). Los bloques se quedan ocultos por si un caso
+         futuro permite elegirlos. -->
+    <div class="bloque oculto" id="bloque-modo">
       <h3>Qué quieres que sea la simulación</h3>
       <div class="opciones" id="opciones-modo">
         <button class="opcion" data-campo="modo" data-valor="contraparte">
@@ -123,7 +132,7 @@
       </div>
     </div>
 
-    <div class="bloque">
+    <div class="bloque oculto" id="bloque-dureza">
       <h3>Dureza</h3>
       <p class="ayuda">Si es tu primera vez, empieza en 2. El nivel 4 no perdona nada.</p>
       <div class="opciones" id="opciones-dureza">
@@ -164,7 +173,7 @@
 <!-- ══════════ BRIEFING ══════════ -->
 <section id="vista-briefing" class="vista">
   <div class="contenedor">
-    <button class="boton fantasma" data-ir="configurar" style="margin-bottom:20px">← Cambiar la configuración</button>
+    <button class="boton fantasma" data-ir="configurar" style="margin-bottom:20px">← Volver</button>
     <h2>Tu briefing confidencial</h2>
     <p class="ayuda" style="color:var(--tenue);max-width:64ch">
       Esto es lo que sabes tú. La simulación tiene su propia ficha, con sus objetivos y sus límites,
@@ -199,14 +208,14 @@
           <h3>La mesa</h3>
           <div class="dato"><span>Caso</span><span id="sala-caso">—</span></div>
           <div class="dato"><span>Tú</span><span id="sala-yo">—</span></div>
-          <div class="dato"><span>Simulación</span><span id="sala-simulacion">—</span></div>
-          <div class="dato"><span>Dureza</span><span id="sala-dureza">—</span></div>
-          <div class="dato"><span>Perfil</span><span id="sala-color">—</span></div>
+          <div class="dato"><span>Al otro lado</span><span id="sala-simulacion">—</span></div>
+          <div class="dato"><span>Nivel</span><span id="sala-dureza">—</span></div>
+          <div class="dato oculto" id="sala-color-fila"><span>Perfil</span><span id="sala-color">—</span></div>
           <div class="dato"><span>Intervenciones</span><span id="sala-turnos">0</span></div>
           <div class="dato oculto" id="sala-competicion-fila"><span>Competición</span><span id="sala-competicion">—</span></div>
         </div>
         <div class="bloque">
-          <h3>Tus objetivos</h3>
+          <h3>Tu briefing</h3>
           <div class="prosa" id="sala-recordatorio" style="font-size:.85rem"></div>
         </div>
         <button class="boton fantasma" id="btn-salir" style="width:100%">Salir de la sala</button>
@@ -244,8 +253,8 @@
   <div class="contenedor">
     <h2>Hoja de preparación</h2>
     <p class="ayuda" style="color:var(--tenue);max-width:64ch">
-      Se guarda sola en tu navegador. Solo sale de tu ordenador si participas en una competición:
-      entonces se envía junto con tu negociación, al terminar, para que el evaluador la tenga en cuenta.
+      Se guarda sola en tu navegador. Al terminar la negociación se envía junto con la conversación
+      al evaluador, para que la tenga en cuenta en tu feedback (competencia «Preparación y estrategia»).
       <span class="guardado" id="aviso-guardado">Guardado</span>
     </p>
 
@@ -395,20 +404,37 @@
       </div>
     </div>
 
-    <div class="bloque">
+    <div class="bloque" id="marco-evaluacion">
       <h3>Cómo se te evalúa</h3>
-      <p class="ayuda">Ocho dimensiones, de 1 a 5, y cada nota va acompañada de una cita literal de lo que dijiste.</p>
+      <p class="ayuda">Ocho competencias, de 1 a 5, con su peso. Cada nota va acompañada de una cita literal de lo que dijiste.
+        La media ponderada da tu nivel global y, multiplicada por 8, los puntos de rúbrica (máximo 40).</p>
       <div class="prosa">
-        <table>
-          <tr><td><strong>Preparación y objetivos</strong></td><td>Llegaste con óptimo, satisfactorio y mínimo por variable, o improvisaste.</td></tr>
-          <tr><td><strong>MAAN</strong></td><td>Usaste tu alternativa como poder y exploraste la suya.</td></tr>
-          <tr><td><strong>Preguntas y exploración</strong></td><td>Pasaste de su posición declarada a su necesidad real.</td></tr>
-          <tr><td><strong>Escucha y autocontrol</strong></td><td>Verificaste, resumiste, usaste el silencio, no te descolocaste.</td></tr>
-          <tr><td><strong>Variables y toma y daca</strong></td><td>Negociaste en paquete o fuiste cerrando de una en una.</td></tr>
-          <tr><td><strong>Disciplina de concesiones</strong></td><td>Decrecientes y siempre a cambio de algo.</td></tr>
-          <tr><td><strong>Tácticas y contratácticas</strong></td><td>Detectaste lo que te estaban haciendo y respondiste.</td></tr>
-          <tr><td><strong>Cierre y concreción</strong></td><td>Resumiste el paquete completo y pediste confirmación.</td></tr>
+        <table class="rubrica-pesos">
+          <thead><tr><th>Competencia</th><th>Qué se observa</th><th>Peso</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Preparación y estrategia</strong></td><td>Llegas con objetivos, límites y alternativas claros: qué necesitas, qué puedes ceder y qué pedirás a cambio.</td><td class="peso">10 %</td></tr>
+            <tr><td><strong>Exploración de intereses</strong></td><td>Investigas qué hay detrás de cada exigencia del cliente y cómo decide, en lugar de quedarte en las posiciones.</td><td class="peso">20 %</td></tr>
+            <tr><td><strong>Escucha y adaptación</strong></td><td>Recoges lo que dice, verificas, resumes y ajustas tu propuesta a la información nueva.</td><td class="peso">10 %</td></tr>
+            <tr><td><strong>Argumentación de valor</strong></td><td>Explicas el valor y los riesgos de cada opción con argumentos verificables.</td><td class="peso">10 %</td></tr>
+            <tr><td><strong>Gestión de presión</strong></td><td>Mantienes la calma y una relación constructiva ante la urgencia y las amenazas, sin ceder por ello.</td><td class="peso">10 %</td></tr>
+            <tr><td><strong>Gestión de concesiones</strong></td><td>Concedes de forma condicionada, dentro de lo que tienes autorizado y a cambio de contrapartidas verificables.</td><td class="peso">15 %</td></tr>
+            <tr><td><strong>Creación de alternativas</strong></td><td>Generas opciones que satisfacen los intereses de ambas partes.</td><td class="peso">15 %</td></tr>
+            <tr><td><strong>Cierre y compromisos</strong></td><td>Cierras un acuerdo concreto y ejecutable: qué, cuándo, precio, qué aporta cada parte, autorizaciones pendientes y cómo se formaliza.</td><td class="peso">10 %</td></tr>
+          </tbody>
         </table>
+        <table>
+          <thead><tr><th>Nivel</th><th>Interpretación</th></tr></thead>
+          <tbody>
+            <tr><td><strong>1 · Reactivo</strong></td><td>Responde a las exigencias sin explorar ni preparar alternativas.</td></tr>
+            <tr><td><strong>2 · Básico</strong></td><td>Identifica algunas necesidades, pero negocia principalmente desde posiciones.</td></tr>
+            <tr><td><strong>3 · Competente</strong></td><td>Explora intereses, argumenta valor y plantea intercambios razonables.</td></tr>
+            <tr><td><strong>4 · Avanzado</strong></td><td>Identifica prioridades ocultas, construye alternativas y gestiona eficazmente las concesiones.</td></tr>
+            <tr><td><strong>5 · Experto</strong></td><td>Integra intereses, riesgos, valor económico y relación comercial en un acuerdo sólido y ejecutable.</td></tr>
+          </tbody>
+        </table>
+        <p>Al terminar recibes además: el resultado de la negociación (qué se ha conseguido, qué queda pendiente y si los
+          compromisos son viables), tres competencias demostradas, tres oportunidades de mejora, el momento crítico de la
+          conversación, una recomendación práctica y tres preguntas de reflexión.</p>
       </div>
     </div>
   </div>
@@ -438,14 +464,14 @@
             <input type="text" id="comp-codigo" maxlength="24" required style="text-transform:uppercase">
           </div>
           <div class="campo">
-            <label for="comp-nombre">Tu nombre o un alias<span class="pista">Es lo que verá tu grupo en el ranking. Entre 2 y 40 caracteres.</span></label>
+            <label for="comp-nombre">Tu nombre o un alias<span class="pista">Es lo que verá tu grupo en el ranking. Puedes usar un alias si prefieres no aparecer con tu nombre. Entre 2 y 40 caracteres.</span></label>
             <input type="text" id="comp-nombre" maxlength="40" required>
           </div>
           <label class="casilla">
             <input type="checkbox" id="comp-consentimiento" required>
             <span>He leído <a href="#" data-desplazar="reglas-competicion">cómo se puntúa</a> y la
-            <a href="#privacidad" data-ir="privacidad">política de privacidad</a>, y acepto que mi nombre o alias, mi papel,
-            el caso, la dureza, si rellené la hoja de preparación y mis puntos se muestren en el ranking de este grupo.
+            <a href="#privacidad" data-ir="privacidad">política de privacidad</a>, y acepto que mi nombre o alias,
+            si rellené la hoja de preparación y mis puntos se muestren en el ranking de este grupo.
             Mi informe y mi hoja solo podremos descargarlos yo y el profesor.</span>
           </label>
           <div class="barra-accion" style="margin-top:16px">
@@ -457,18 +483,18 @@
 
       <div class="bloque" id="reglas-competicion">
         <h3>Cómo se puntúa</h3>
-        <p class="formula">Puntos = (Rúbrica + Resultado) × Factor de dureza</p>
+        <p class="formula">Puntos = (Rúbrica + Resultado) × 1,25</p>
         <div class="prosa">
           <table>
-            <tr><td><strong>Rúbrica</strong><br><small>máx. 40</small></td><td>Las ocho dimensiones del <a href="#" data-abrir-rubrica>marco</a>, de 1 a 5 cada una. Cada nota va con una cita literal de lo que dijiste.</td></tr>
-            <tr><td><strong>Resultado</strong><br><small>máx. 20</small></td><td>Qué parte del valor disponible capturaste en el acuerdo: entre tu mínimo (0 %) y tu óptimo (100 %), ponderado por la importancia de cada variable. Se multiplica por 20. <strong>Sin acuerdo completo, 0.</strong></td></tr>
-            <tr><td><strong>Factor de dureza</strong></td><td>1 · Colaborativo ×1,00 · 2 · Firme ×1,10 · 3 · Implacable ×1,25 · 4 · Hostil ×1,40</td></tr>
+            <tr><td><strong>Rúbrica</strong><br><small>máx. 40</small></td><td>Las ocho competencias de la <a href="#" data-abrir-rubrica>rúbrica</a>, de 1 a 5, con su peso. La media ponderada se multiplica por 8. Cada nota va con una cita literal de lo que dijiste.</td></tr>
+            <tr><td><strong>Resultado</strong><br><small>máx. 20</small></td><td>Qué parte del valor disponible capturaste en el acuerdo (plazo, alcance, precio, penalizaciones y colaboración del cliente), ponderado según las prioridades de tu briefing. Comprometer lo que no tienes autorizado cuenta 0 en esa variable. Se multiplica por 20. <strong>Sin acuerdo completo, 0.</strong></td></tr>
+            <tr><td><strong>Factor de nivel</strong></td><td>Nivel avanzado (3/4), igual para todos: ×1,25</td></tr>
           </table>
-          <p>Máximo posible: (40 + 20) × 1,40 = <strong>84 puntos</strong>.</p>
+          <p>Máximo posible: (40 + 20) × 1,25 = <strong>75 puntos</strong>.</p>
           <ul>
             <li><strong>Quién evalúa.</strong> Al pulsar «Fin de la simulación», un evaluador independiente (una IA distinta de la contraparte, con la rúbrica y las fichas de ambas partes) lee la conversación completa y pone las notas. La contraparte no puntúa, y nada de lo que le digas durante la negociación cambia las reglas del evaluador.</li>
-            <li><strong>Hoja de preparación.</strong> No suma puntos por sí misma: el evaluador la usa como evidencia en «Preparación y objetivos». En el ranking aparece «Sí» si tiene rellenos al menos la mitad de sus campos.</li>
-            <li><strong>Condiciones iguales para todos.</strong> En competición la simulación juega solo como contraparte, sin coach ni tiempo muerto. Hacen falta al menos tres intervenciones tuyas.</li>
+            <li><strong>Hoja de preparación.</strong> No suma puntos por sí misma: el evaluador la usa como evidencia en «Preparación y estrategia». En el ranking aparece «Sí» si tiene rellenos al menos la mitad de sus campos.</li>
+            <li><strong>Condiciones iguales para todos.</strong> Mismo caso, mismo papel, mismo interlocutor y mismo nivel, sin coach ni tiempo muerto. Hacen falta al menos tres intervenciones tuyas.</li>
             <li><strong>Cada negociación puntúa una vez.</strong> Puedes repetir todas las veces que quieras; el ranking puede mostrar todos los intentos o solo el mejor de cada persona.</li>
             <li><strong>La conversación va firmada.</strong> El servidor comprueba que la negociación evaluada es exactamente la que tuvo lugar.</li>
             <li><strong>Es una evaluación automática.</strong> Puede equivocarse. El profesor puede revisar cualquier informe y anular resultados.</li>
@@ -480,8 +506,8 @@
     <div class="bloque oculto" id="comp-ranking-bloque">
       <h3>Ranking <small id="rk-grupo"></small></h3>
       <div class="controles-ranking">
-        <select id="rk-caso" aria-label="Filtrar por caso"><option value="">Todos los casos</option></select>
-        <select id="rk-rol" aria-label="Filtrar por papel"><option value="">Todos los papeles</option></select>
+        <select id="rk-caso" class="oculto" aria-label="Filtrar por caso"><option value="">Todos los casos</option></select>
+        <select id="rk-rol" class="oculto" aria-label="Filtrar por papel"><option value="">Todos los papeles</option></select>
         <label class="casilla en-linea"><input type="checkbox" id="rk-mejor" checked> <span>Solo el mejor intento de cada persona</span></label>
         <button class="boton fantasma" id="rk-actualizar" type="button">Actualizar</button>
       </div>
@@ -556,18 +582,18 @@
       <strong data-titular="nombre">[NOMBRE Y APELLIDOS]</strong>. Contacto:
       <a data-titular="email" href="#">[EMAIL DE CONTACTO]</a>.</p>
     <h3>Objeto</h3>
-    <p>Negociador Implacable es un simulador docente y gratuito para entrenar habilidades de negociación.
-      No tiene finalidad comercial ni requiere registro.</p>
+    <p>NegoLab es un simulador docente para entrenar habilidades de negociación. Esta edición está adaptada
+      al programa formativo de Tecnobit. No requiere registro.</p>
     <h3>Contenido generado por inteligencia artificial</h3>
     <p>La contraparte de la negociación y el evaluador de la competición son modelos de inteligencia
       artificial. Sus respuestas, notas e informes se generan automáticamente, pueden contener errores y
       tienen un fin exclusivamente formativo: no constituyen asesoramiento profesional de ningún tipo.</p>
     <h3>Casos</h3>
-    <p>Las empresas, personas y situaciones de los casos son ficticias. Cualquier parecido con la realidad es
-      casual.</p>
+    <p>Los programas, cifras, personajes y circunstancias de los casos son ficticios y no representan información
+      contractual real. Cualquier parecido con la realidad es casual.</p>
     <h3>Propiedad intelectual</h3>
     <p>Los textos, casos, rúbrica y diseño del sitio pertenecen a su titular, salvo las librerías de terceros
-      que se usan con sus propias licencias. Puedes usarlos para tu formación; para reproducirlos o
+      que se usan con sus propias licencias. La marca y el logotipo de Tecnobit pertenecen a su titular. Puedes usarlos para tu formación; para reproducirlos o
       distribuirlos con otros fines, pide permiso.</p>
     <h3>Uso adecuado</h3>
     <p>No está permitido usar el simulador para fines distintos del entrenamiento, intentar acceder a las
@@ -592,9 +618,9 @@
     <table>
       <thead><tr><th>Cuándo</th><th>Qué datos</th><th>Para qué</th><th>Base jurídica</th></tr></thead>
       <tbody>
-        <tr><td>Al negociar</td><td>Lo que escribes en la sala</td><td>Generar las respuestas de la contraparte. No se guarda en nuestro servidor.</td><td>Prestarte el servicio que pides</td></tr>
+        <tr><td>Al negociar</td><td>Lo que escribes en la sala</td><td>Generar las respuestas de la contraparte y tu feedback. No se guarda en nuestro servidor salvo que compitas.</td><td>Prestarte el servicio que pides</td></tr>
         <tr><td>Avatar de vídeo</td><td>El texto de la contraparte (no tu voz ni tu imagen)</td><td>Ponerle cara y voz</td><td>Prestarte el servicio que pides</td></tr>
-        <tr><td>Hoja de preparación</td><td>Lo que escribes en ella</td><td>Se guarda solo en tu navegador. Si compites, se envía con tu negociación para el evaluador</td><td>Tu consentimiento (al competir)</td></tr>
+        <tr><td>Hoja de preparación</td><td>Lo que escribes en ella</td><td>Se guarda solo en tu navegador. Al terminar, se envía con tu negociación al evaluador; solo se conserva si compites</td><td>Prestarte el servicio que pides; tu consentimiento (al competir)</td></tr>
         <tr><td>Competición</td><td>Nombre o alias, código de grupo, caso, papel, dureza, puntos, informe de evaluación (con citas literales de tus intervenciones) y hoja de preparación</td><td>Evaluarte y mostrar el ranking de tu grupo</td><td>Tu consentimiento</td></tr>
         <tr><td>Analítica</td><td>Datos de navegación de Google Analytics</td><td>Saber cuánto se usa la web</td><td>Tu consentimiento (solo si aceptas)</td></tr>
       </tbody>
@@ -673,8 +699,8 @@
 <footer class="principal">
   <div class="contenedor">
     <div>
-      <div>Negociador Implacable · simulador docente de negociación</div>
-      <div>Las empresas y situaciones de los casos son ficción con fines formativos. La contraparte es una inteligencia artificial.</div>
+      <div>NegoLab · Tecnobit — simulador de negociación</div>
+      <div>Los programas, cifras y personajes del caso son ficticios. La contraparte es una inteligencia artificial.</div>
     </div>
     <nav class="pie-enlaces" aria-label="Información legal">
       <a href="#aviso-legal" data-ir="aviso-legal">Aviso legal</a>
