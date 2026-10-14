@@ -427,6 +427,8 @@ table.ranking tr.podio-2 td.pos { color: #7d8a99; }
 table.ranking tr.podio-3 td.pos { color: #a0612f; }
 table.ranking tr.mio td { background: var(--acento-suave); }
 table.ranking td.puntos { font-weight: 700; color: var(--acento); font-size: .98rem; }
+/* Los puntos van centrados bajo su cabecera «Puntos». */
+table.ranking td.puntos, table.ranking th.centro { text-align: center; }
 table.ranking .acciones { display: flex; gap: 6px; flex-wrap: wrap; }
 table.ranking .acciones button { font-size: .76rem; padding: 4px 9px; }
 .vacio { color: var(--tenue); font-size: .9rem; padding: 10px 0; }
