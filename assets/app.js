@@ -1,4 +1,4 @@
-/* Negociador Implacable — front-end
+/* NegoLab (edición Tecnobit) — front-end
    Sin dependencias externas. Todo el estado vive en el navegador;
    las fichas confidenciales de la simulación nunca llegan hasta aquí. */
 
@@ -14,7 +14,10 @@ const estado = {
   rolId: null,
   // El perfil conductual ya no se elige en la web (ver 04-despliegue-web.md /
   // bitácora): la simulación juega siempre "rojo · impulsor".
-  config: { modo: 'evaluador', dureza: 2, color: 'rojo' },
+  // En el caso Tecnobit la configuración la fija el servidor (contraparte,
+  // dureza 3): todos negocian igual y al terminar reciben el feedback del
+  // evaluador independiente. Ver configFija en negociador-api/src/casos.js.
+  config: { modo: 'contraparte', dureza: 3, color: 'rojo' },
   briefing: null,
   mensajes: [],
   ocupado: false,
@@ -244,6 +247,7 @@ async function cargarCasos({ intento = 1 } = {}) {
 
 function pintarFiltros() {
   const tipos = ['todos', ...new Set(estado.casos.map((c) => c.tipo))];
+  $('#filtros').classList.toggle('oculto', estado.casos.length < 2);
   const nombre = { todos: 'Todos', comercial: 'Comercial', compras: 'Compras', proyectos: 'Proyectos' };
   $('#filtros').innerHTML = tipos
     .map((t) => `<button data-filtro="${t}" aria-pressed="${t === estado.filtro}">${nombre[t] || t}</button>`)
@@ -261,12 +265,14 @@ function pintarCasos() {
     <article class="tarjeta">
       <div class="meta">
         <span class="pastilla ${c.tipo}">${c.tipo}</span>
-        <span class="pastilla">Dificultad ${c.dificultad}</span>
-        <span class="pastilla">${c.duracion}</span>
+        <span class="pastilla">Nivel ${escapar(c.dificultad)}</span>
+        <span class="pastilla">${escapar(c.duracion)}</span>
       </div>
       <h3>${escapar(c.titulo)}</h3>
       <p class="sub">${escapar(c.subtitulo || '')}</p>
       <p class="resumen">${escapar(c.resumen)}</p>
+      ${c.roles.length === 1 && c.contraparte ? `<div class="vars"><strong>Tu papel:</strong> ${escapar(c.roles[0].nombre)}<br>
+        <strong>Al otro lado:</strong> ${escapar(c.contraparte.nombre)}</div>` : ''}
       <div class="vars"><strong>Variables:</strong> ${c.variables.map(escapar).join(' · ')}</div>
       <button class="boton" data-caso="${c.id}">Preparar esta negociación</button>
     </article>`
@@ -284,6 +290,32 @@ function abrirConfigurador(casoId) {
   estado.rolId = null;
   $('#config-titulo').textContent = estado.caso.titulo;
   $('#config-sub').textContent = estado.caso.subtitulo || '';
+
+  // Caso con papel y configuración fijos (Tecnobit): no se elige nada; se
+  // muestra la mesa tal cual y el servidor impone esa misma configuración.
+  const fija = estado.caso.configFija;
+  $('#bloque-modo').classList.toggle('oculto', Boolean(fija));
+  $('#bloque-dureza').classList.toggle('oculto', Boolean(fija));
+  if (fija) estado.config = { ...fija };
+  if (estado.caso.roles.length === 1) {
+    const yo = estado.caso.roles[0];
+    const otro = estado.caso.contraparte || { nombre: 'La contraparte', descripcion: '' };
+    estado.rolId = yo.id;
+    $('#titulo-rol').textContent = 'La mesa';
+    $('#opciones-rol').className = 'ficha-fija';
+    $('#opciones-rol').innerHTML = `
+      <div class="item"><span>Tu papel</span><strong>${escapar(yo.nombre)}</strong><small>${escapar(yo.descripcion || '')}</small></div>
+      <div class="item"><span>Al otro lado</span><strong>${escapar(otro.nombre)}</strong><small>${escapar(otro.descripcion || '')}</small></div>
+      <div class="item"><span>Nivel</span><strong>${escapar(NOMBRE_DUREZA_FIJA[estado.config.dureza] || String(estado.config.dureza))}</strong><small>Igual para todos los participantes.</small></div>
+      <div class="item"><span>Duración</span><strong>${escapar(estado.caso.duracion || '')}</strong><small>Al terminar, un evaluador independiente te da el feedback.</small></div>`;
+    $('#btn-empezar').disabled = false;
+    $('#nota-config').textContent = '';
+    pintarCompeticionEnConfigurador();
+    ir('configurar');
+    return;
+  }
+  $('#titulo-rol').innerHTML = 'Tu papel <small>eliges un lado; la simulación juega el otro</small>';
+  $('#opciones-rol').className = 'opciones';
   $('#opciones-rol').innerHTML = estado.caso.roles
     .map(
       (r) => `<button class="opcion" data-rol="${r.id}">
@@ -349,6 +381,7 @@ $('#btn-empezar').addEventListener('click', async () => {
 
 const NOMBRE_COLOR = { rojo: 'Rojo', amarillo: 'Amarillo', verde: 'Verde', azul: 'Azul', oculto: 'Oculto' };
 const NOMBRE_DUREZA = { 1: '1 · Colaborativo', 2: '2 · Firme', 3: '3 · Implacable', 4: '4 · Hostil' };
+const NOMBRE_DUREZA_FIJA = { 1: '1/4 · Inicial', 2: '2/4 · Intermedio', 3: '3/4 · Avanzado', 4: '4/4 · Experto' };
 
 /* ─────────── Avatar (anam.ai) ───────────
    El avatar solo pone cara y voz: quien negocia sigue siendo Claude, a
@@ -502,8 +535,10 @@ function entrarEnLaSala() {
   $('#sala-caso').textContent = estado.caso.titulo;
   $('#sala-yo').textContent = estado.briefing.rol.nombre;
   $('#sala-simulacion').textContent = estado.briefing.contraparte.nombre;
-  $('#sala-dureza').textContent = NOMBRE_DUREZA[estado.config.dureza];
+  const fija = Boolean(estado.caso.configFija);
+  $('#sala-dureza').textContent = (fija ? NOMBRE_DUREZA_FIJA : NOMBRE_DUREZA)[estado.config.dureza];
   $('#sala-color').textContent = NOMBRE_COLOR[estado.config.color];
+  $('#sala-color-fila').classList.toggle('oculto', fija);
   $('#sala-turnos').textContent = '0';
   $('#sala-recordatorio').innerHTML = md(estado.briefing.rol.briefing);
   $('#btn-tiempo-muerto').classList.toggle('oculto', estado.config.modo !== 'coach');
@@ -763,6 +798,12 @@ $$('[data-atajo]').forEach((b) =>
       evaluarCompeticion();
       return;
     }
+    if (esFin && estado.caso && estado.caso.configFija) {
+      if (estado.terminada || estado.ocupado || estado.evaluando) return;
+      if (!confirm('Se cerrará la negociación y un evaluador independiente analizará la conversación para darte tu feedback. ¿Continuar?')) return;
+      evaluarLibre();
+      return;
+    }
     if (esFin && !confirm('Se cerrará la negociación y la simulación entregará el informe. ¿Continuar?')) return;
     enviar(b.dataset.atajo);
   })
@@ -939,14 +980,27 @@ $('#btn-borrar-prep').addEventListener('click', () => {
 
 const SIN_RESPUESTA = 'No contestado';
 
+// Logotipo de Tecnobit para la cabecera de los PDF. Se precarga como data URL
+// al abrir la web; si no se pudiera cargar, el PDF sale igual sin logotipo.
+let logoPdf = null;
+fetch('assets/tecnobit-logo.svg')
+  .then((r) => (r.ok ? r.text() : ''))
+  .then((svg) => {
+    // El SVG solo envuelve un PNG: jsPDF necesita ese PNG como data URL.
+    const m = svg.match(/href="(data:image\/png;base64,[^"]+)"/);
+    if (m) logoPdf = m[1];
+  })
+  .catch(() => {});
+
+// Paleta corporativa de Tecnobit, igual que la web.
 const COLOR_PDF = {
-  fondo: [13, 16, 22],
-  fondo2: [20, 25, 34],
-  superficie: [25, 31, 42],
-  borde: [40, 48, 61],
-  texto: [232, 234, 238],
-  tenue: [152, 163, 179],
-  acento: [224, 164, 88],
+  fondo: [255, 255, 255],
+  fondo2: [243, 246, 249],
+  superficie: [234, 240, 245],
+  borde: [211, 221, 230],
+  texto: [28, 43, 58],
+  tenue: [91, 109, 128],
+  acento: [49, 86, 122],
 };
 
 /* La librería viaja con la web (assets/vendor/), así que el PDF también
@@ -999,7 +1053,7 @@ function crearConstructorPdf(doc) {
   const fondo = () => { doc.setFillColor(...COLOR_PDF.fondo); doc.rect(0, 0, ANCHO_PAG, ALTO_PAG, 'F'); };
   const pie = () => {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...COLOR_PDF.tenue);
-    doc.text('Negociador Implacable · simulador docente de negociación', M, ALTO_PAG - 10);
+    doc.text('NegoLab · Tecnobit — simulador de negociación', M, ALTO_PAG - 10);
     doc.text(String(pos.pagina), ANCHO_PAG - M, ALTO_PAG - 10, { align: 'right' });
   };
   const saltarPagina = () => { pie(); doc.addPage(); pos.pagina++; fondo(); pos.y = M + 8; };
@@ -1009,9 +1063,12 @@ function crearConstructorPdf(doc) {
     fondo();
     pos.y = M + 6;
     doc.setFillColor(...COLOR_PDF.acento);
-    doc.circle(M + 1.6, pos.y - 1.4, 1.5, 'F');
+    doc.rect(0, 0, ANCHO_PAG, 2.2, 'F');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...COLOR_PDF.acento);
-    doc.text('NEGOCIADOR IMPLACABLE', M + 5.6, pos.y);
+    doc.text('NEGOLAB · TECNOBIT', M, pos.y);
+    if (logoPdf) {
+      try { doc.addImage(logoPdf, 'PNG', ANCHO_PAG - M - 28, pos.y - 6.5, 28, 9.9); } catch {}
+    }
     pos.y += 10;
     doc.setFontSize(19); doc.setTextColor(...COLOR_PDF.texto);
     doc.text(tituloDoc, M, pos.y);
@@ -1447,7 +1504,7 @@ function pintarCompeticionEnConfigurador() {
   const caja = $('#competicion-config');
   if (!ins) {
     caja.innerHTML = `<p class="ayuda" style="margin:0 0 12px">¿Tu profesor te ha dado un código de grupo?
-      Apúntate y esta negociación puntuará en el ranking.</p>
+      Apúntate con tu nombre o un alias y esta negociación puntuará en el ranking. Si no, recibirás igualmente tu feedback.</p>
       <button class="boton secundario" type="button" data-ir="competicion">Apuntarme a una competición</button>`;
     aplicarBloqueoModo();
     return;
@@ -1457,8 +1514,8 @@ function pintarCompeticionEnConfigurador() {
       <span>Esta negociación puntúa en <strong>${escapar(ins.nombreGrupo || ins.codigo)}</strong> (${escapar(ins.codigo)})
       como <strong>${escapar(ins.nombre)}</strong>.</span>
     </label>
-    <p class="ayuda" style="margin:10px 0 0">En competición la simulación juega solo como contraparte, sin coach ni tiempo
-      muerto, y al pulsar «Fin de la simulación» te puntúa un evaluador independiente.
+    <p class="ayuda" style="margin:10px 0 0">Al pulsar «Fin de la simulación» te puntúa un evaluador independiente y tu
+      resultado entra en el ranking del grupo con tu nombre o alias.
       <a href="#" data-desplazar-reglas>Cómo se puntúa</a>.</p>`;
   $('#chk-puntua').addEventListener('change', (e) => {
     estado.competicion.puntua = e.target.checked;
@@ -1553,6 +1610,86 @@ async function evaluarCompeticion() {
   }
 }
 
+/* ─── Feedback sin competición ───
+   Mismo evaluador independiente que en la competición, pero sin guardar nada
+   en el servidor (/api/feedback). Es lo que recibe cualquier participante
+   que no esté apuntado a un grupo. */
+async function evaluarLibre() {
+  if (estado.evaluando || estado.terminada || estado.ocupado) return;
+  if (estado.mensajes.filter((m) => m.role === 'user').length < 3) {
+    turno('sistema', 'La negociación es demasiado corta para evaluarla: necesitas al menos tres intervenciones.', '');
+    return;
+  }
+  estado.evaluando = true;
+  bloquearComposicion(true);
+  const aviso = turno('sistema', '', '');
+  aviso.querySelector('.texto').innerHTML =
+    '<span class="escribiendo"><i></i><i></i><i></i></span><br>Negociación cerrada. El evaluador independiente está leyendo la conversación completa; tarda alrededor de un minuto.';
+  const hoja = hojaParaEnviar();
+  try {
+    const { r, datos } = await pedirJson(`${API}/api/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        casoId: estado.caso.id,
+        rolId: estado.rolId,
+        config: estado.config,
+        mensajes: estado.mensajes,
+        firma: estado.firma,
+        hoja,
+      }),
+    });
+    if (!r.ok) {
+      const reintentable = r.status >= 500 || r.status === 429;
+      aviso.querySelector('.texto').innerHTML =
+        `<span style="color:var(--rojo)">${escapar(datos.error || 'No se ha podido completar la evaluación.')}</span>` +
+        (reintentable ? '<br><button class="boton secundario" type="button" style="margin-top:10px">Reintentar la evaluación</button>' : '');
+      const b = aviso.querySelector('button');
+      if (b) b.addEventListener('click', () => { aviso.remove(); evaluarLibre(); });
+      return;
+    }
+    estado.terminada = true;
+    aviso.remove();
+    const p = datos.puntos;
+    const div = turno('informe', '', 'Tu feedback');
+    div.querySelector('.texto').innerHTML = `<div class="resultado-competicion">
+        <div class="cifra">${fmtNum(p.puntos)} puntos</div>
+        <div>(${fmtNum(p.rubrica)} de rúbrica + ${fmtNum(p.resultado)} de resultado) × ${fmtNum(p.factor)} por nivel ·
+          no se ha registrado en ningún ranking</div>
+      </div>` + md(datos.informe);
+    const barra = document.createElement('div');
+    barra.className = 'barra-accion';
+    barra.style.marginTop = '14px';
+    const fecha = new Date().toISOString();
+    const metaInforme = {
+      filas: [['Caso', estado.caso.titulo], ['Mi papel', estado.briefing.rol.nombre], ['Puntos', fmtNum(p.puntos)]],
+      fecha,
+    };
+    const bPdf = document.createElement('button');
+    bPdf.type = 'button'; bPdf.className = 'boton secundario'; bPdf.textContent = 'Descargar feedback en PDF';
+    bPdf.addEventListener('click', () => conBotonOcupado(bPdf, () => descargarInformePdf(datos.informe, metaInforme), () => descargarInformeMarkdown(datos.informe)));
+    barra.appendChild(bPdf);
+    if (estado.competicion.disponible) {
+      const bComp = document.createElement('button');
+      bComp.type = 'button'; bComp.className = 'boton fantasma'; bComp.textContent = 'Apuntarme a la competición';
+      bComp.addEventListener('click', () => ir('competicion'));
+      barra.appendChild(bComp);
+    }
+    div.appendChild(barra);
+    $('#conversacion').scrollTop = div.offsetTop - 20;
+    turno('sistema', 'Simulación cerrada. Puedes repetir el caso desde «El caso» todas las veces que quieras' +
+      (estado.competicion.disponible ? '; si tienes código de grupo, apúntate a la competición para entrar en el ranking.' : '.'), '');
+  } catch (err) {
+    aviso.querySelector('.texto').innerHTML =
+      `<span style="color:var(--rojo)">Error de conexión: ${escapar(String(err.message || err))}</span>
+       <br><button class="boton secundario" type="button" style="margin-top:10px">Reintentar la evaluación</button>`;
+    aviso.querySelector('button').addEventListener('click', () => { aviso.remove(); evaluarLibre(); });
+  } finally {
+    estado.evaluando = false;
+    bloquearComposicion(false);
+  }
+}
+
 function pintarInformeOficial(datos, meta, hoja) {
   const p = datos.puntos;
   const div = turno('informe', '', 'Evaluación oficial de la competición');
@@ -1560,7 +1697,7 @@ function pintarInformeOficial(datos, meta, hoja) {
   caja.innerHTML = `<div class="resultado-competicion">
       <div class="cifra">${fmtNum(p.puntos)} puntos</div>
       <div>Puesto <strong>${datos.posicion}</strong> en el ranking de tu grupo ahora mismo ·
-        (${p.rubrica} de rúbrica + ${fmtNum(p.resultado)} de resultado) × ${fmtNum(p.factor)} por dureza</div>
+        (${fmtNum(p.rubrica)} de rúbrica + ${fmtNum(p.resultado)} de resultado) × ${fmtNum(p.factor)} por nivel</div>
     </div>` + md(datos.informe);
 
   const barra = document.createElement('div');
@@ -1588,7 +1725,7 @@ function pintarInformeOficial(datos, meta, hoja) {
   boton('Ver el ranking', '', () => ir('competicion'));
   div.appendChild(barra);
   $('#conversacion').scrollTop = div.offsetTop - 20;
-  turno('sistema', 'Simulación cerrada y registrada en el ranking. Puedes repetir el caso, cambiar de papel o subir la dureza desde la biblioteca.', '');
+  turno('sistema', 'Simulación cerrada y registrada en el ranking. Puedes repetir el caso desde «El caso» todas las veces que quieras.', '');
 }
 
 async function conBotonOcupado(boton, generar, respaldo) {
@@ -1720,8 +1857,13 @@ function rellenarFiltrosRanking() {
     if (pares.some(([v]) => v === actual)) sel.value = actual;
   };
   const unicos = (f) => [...new Map(rankingDatos.map((x) => f(x))).entries()];
-  rellenar($('#rk-caso'), unicos((x) => [x.caso_id, x.caso_titulo]), 'Todos los casos');
-  rellenar($('#rk-rol'), unicos((x) => [x.rol_id, x.rol_nombre]), 'Todos los papeles');
+  const casos = unicos((x) => [x.caso_id, x.caso_titulo]);
+  const roles = unicos((x) => [x.rol_id, x.rol_nombre]);
+  rellenar($('#rk-caso'), casos, 'Todos los casos');
+  rellenar($('#rk-rol'), roles, 'Todos los papeles');
+  // Con un solo caso y un solo papel (edición Tecnobit), los filtros sobran.
+  $('#rk-caso').classList.toggle('oculto', casos.length < 2);
+  $('#rk-rol').classList.toggle('oculto', roles.length < 2);
 }
 
 function pintarRanking() {
@@ -1748,6 +1890,12 @@ function pintarRanking() {
     return;
   }
 
+  // Las columnas de papel, caso y dureza solo se muestran si hay variedad.
+  const varios = (f) => new Set(rankingDatos.map(f)).size > 1;
+  const verRol = varios((x) => x.rol_id);
+  const verCaso = varios((x) => x.caso_id);
+  const verDureza = varios((x) => x.dureza);
+
   let posicion = 0;
   let anterior = null;
   const html = filas.map((x, i) => {
@@ -1763,9 +1911,9 @@ function pintarRanking() {
     return `<tr class="${mio ? 'mio' : ''} ${posicion <= 3 ? 'podio-' + posicion : ''}">
         <td class="pos">${posicion}</td>
         <td>${escapar(x.nombre)}${mio ? ' <small style="color:var(--acento)">(tú)</small>' : ''}</td>
-        <td>${escapar(x.rol_nombre)}</td>
-        <td>${escapar(x.caso_titulo)}</td>
-        <td>${escapar(NOMBRE_DUREZA[x.dureza] || String(x.dureza))}</td>
+        ${verRol ? `<td>${escapar(x.rol_nombre)}</td>` : ''}
+        ${verCaso ? `<td>${escapar(x.caso_titulo)}</td>` : ''}
+        ${verDureza ? `<td>${escapar(NOMBRE_DUREZA[x.dureza] || String(x.dureza))}</td>` : ''}
         <td style="white-space:nowrap">${x.hoja_rellenada ? `Sí <small style="color:var(--tenue)">${x.hoja_completitud} %</small>` : 'No'}</td>
         <td class="num puntos">${fmtNum(x.puntos)}</td>
         <td style="white-space:nowrap;color:var(--tenue)">${fechaCorta(x.creado)}</td>
@@ -1774,7 +1922,7 @@ function pintarRanking() {
   }).join('');
 
   $('#rk-tabla').innerHTML = `<div class="tabla-desplazable"><table class="ranking">
-      <thead><tr><th>#</th><th>Nombre</th><th>Papel</th><th>Caso</th><th>Dureza</th><th>Hoja</th><th>Puntos</th><th>Fecha</th><th>Tus descargas</th></tr></thead>
+      <thead><tr><th>#</th><th>Nombre o alias</th>${verRol ? '<th>Papel</th>' : ''}${verCaso ? '<th>Caso</th>' : ''}${verDureza ? '<th>Dureza</th>' : ''}<th>Hoja</th><th>Puntos</th><th>Fecha</th><th>Tus descargas</th></tr></thead>
       <tbody>${html}</tbody></table></div>`;
 
   $$('#rk-tabla [data-mio]').forEach((b) => b.addEventListener('click', () => accionMiResultado(b)));
