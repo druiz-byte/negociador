@@ -570,6 +570,43 @@ function turno(tipo, texto, quien) {
   return div;
 }
 
+/* ─── Texto para la voz del avatar ───
+   Dónde cortar: tras un fin de frase (. ? ! ; :) o salto de línea seguido de
+   espacio. Si no hay ninguno y el texto ya es largo, en el último espacio,
+   para no retrasar demasiado la voz. Devuelve la posición de corte o 0. */
+function ultimoCorteDeFrase(t) {
+  let corte = 0;
+  const re = /[.!?;:…](?=\s)|\n/g;
+  let m;
+  while ((m = re.exec(t))) corte = m.index + 1;
+  if (!corte && t.length > 160) {
+    const esp = t.lastIndexOf(' ');
+    if (esp > 60) corte = esp + 1;
+  }
+  return corte;
+}
+
+/* Símbolos y abreviaturas que una voz multilingüe tiende a leer en inglés
+   ("€", "%", "M€", "48 h"…) se escriben con palabras en castellano, y se
+   quitan las marcas de formato que no deben leerse. Solo afecta a lo que
+   dice el avatar; en pantalla el texto sigue igual. */
+function textoParaVoz(t) {
+  return String(t || '')
+    .replace(/[*_#`«»"“”]/g, '')
+    .replace(/(\d)\s*M€/g, '$1 millones de euros')
+    .replace(/(\d)\s*k€/gi, '$1 mil euros')
+    .replace(/(\d)\s*€/g, '$1 euros')
+    .replace(/€/g, ' euros')
+    .replace(/(\d)\s*%/g, '$1 por ciento')
+    .replace(/(\d)\s*h\b/g, '$1 horas')
+    .replace(/(\d)\s*(?:sem\.|semanas?)\b/g, '$1 semanas')
+    .replace(/\bvs\.?\s/gi, 'frente a ')
+    .replace(/\bOK\b/g, 'de acuerdo')
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/\//g, ' o ')
+    .replace(/[ \t]{2,}/g, ' ');
+}
+
 function esInforme(texto) {
   return /^##\s*Resultado/m.test(texto) || /^##\s*Puntuaci/m.test(texto);
 }
@@ -653,12 +690,31 @@ async function hablarConSimulacion() {
       return salida;
     };
 
-    const enviarAlAvatar = (texto, esUltimo = false) => {
-      if (!avatarDisponible || esModoInforme || !flujoAvatar) return;
-      if (!texto && !esUltimo) return;
+    // Al avatar no se le mandan los trozos tal como llegan (a veces son
+    // una o dos letras, o una cifra suelta como "140.000 €"): con tan poco
+    // texto, la voz multilingüe de anam.ai puede "adivinar" otro idioma y
+    // pasarse al inglés a mitad de frase. Se acumula el texto y se envía
+    // por frases completas, ya normalizado para leerse en castellano.
+    let pendienteAvatar = '';
+    const mandarTrozo = (texto, esUltimo) => {
       try {
         if (flujoAvatar.isActive()) flujoAvatar.streamMessageChunk(texto, esUltimo);
       } catch (err) { console.error('Avatar (talkStream):', err); }
+    };
+    const enviarAlAvatar = (texto, esUltimo = false) => {
+      if (!avatarDisponible || esModoInforme || !flujoAvatar) return;
+      pendienteAvatar += texto || '';
+      if (esUltimo) {
+        const resto = textoParaVoz(pendienteAvatar);
+        pendienteAvatar = '';
+        mandarTrozo(resto, true);
+        return;
+      }
+      const corte = ultimoCorteDeFrase(pendienteAvatar);
+      if (corte <= 0) return;
+      const frase = textoParaVoz(pendienteAvatar.slice(0, corte));
+      pendienteAvatar = pendienteAvatar.slice(corte);
+      if (frase.trim()) mandarTrozo(frase, false);
     };
 
     const decidirAvatar = (forzar = false) => {
@@ -703,6 +759,8 @@ async function hablarConSimulacion() {
     }
 
     if (!decidido) decidirAvatar(true);
+    // Lo que quede sin cerrar en frase se manda ahora, como último trozo.
+    if (flujoAvatar && pendienteAvatar.trim()) enviarAlAvatar('', true);
     if (flujoAvatar) {
       try { if (flujoAvatar.isActive()) await flujoAvatar.endMessage(); } catch {}
     }
@@ -1765,7 +1823,7 @@ function pintarCompeticion() {
     estadoCaja.innerHTML = `<div class="inscripcion-activa">
         Estás en <strong>${escapar(ins.nombreGrupo || ins.codigo)}</strong> (${escapar(ins.codigo)})
         como <strong>${escapar(ins.nombre)}</strong>.
-        ${ins.abierto === false ? '<br><span style="color:var(--rojo)">Esta competición está cerrada: ya no admite resultados nuevos.</span>' : ''}
+        ${ins.abierto === false ? '<br><span style="color:var(--rojo)">Esta simulación está cerrada: ya no admite resultados nuevos.</span>' : ''}
       </div>
       <div class="barra-accion">
         <button class="boton" type="button" data-ir="casos">Elegir un caso y competir</button>
@@ -1922,7 +1980,7 @@ function pintarRanking() {
   }).join('');
 
   $('#rk-tabla').innerHTML = `<div class="tabla-desplazable"><table class="ranking">
-      <thead><tr><th>#</th><th>Nombre o alias</th>${verRol ? '<th>Papel</th>' : ''}${verCaso ? '<th>Caso</th>' : ''}${verDureza ? '<th>Dureza</th>' : ''}<th>Hoja</th><th>Puntos</th><th>Fecha</th><th>Tus descargas</th></tr></thead>
+      <thead><tr><th>#</th><th>Nombre o alias</th>${verRol ? '<th>Papel</th>' : ''}${verCaso ? '<th>Caso</th>' : ''}${verDureza ? '<th>Dureza</th>' : ''}<th>Hoja</th><th class="centro">Puntos</th><th>Fecha</th><th>Tus descargas</th></tr></thead>
       <tbody>${html}</tbody></table></div>`;
 
   $$('#rk-tabla [data-mio]').forEach((b) => b.addEventListener('click', () => accionMiResultado(b)));
@@ -2090,7 +2148,7 @@ async function verResultadosProfesor(codigo, grupo) {
   profResultados = datos.resultados;
   if (!profResultados.length) { caja.innerHTML = '<p class="vacio">Este grupo todavía no tiene resultados.</p>'; return; }
   caja.innerHTML = `<div class="tabla-desplazable"><table class="ranking">
-    <thead><tr><th>#</th><th>Nombre</th><th>Papel</th><th>Caso</th><th>Dureza</th><th>Hoja</th><th>Rúbrica</th><th>Resultado</th><th>×</th><th>Puntos</th><th>Fecha</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>Nombre</th><th>Papel</th><th>Caso</th><th>Dureza</th><th>Hoja</th><th>Rúbrica</th><th>Resultado</th><th>×</th><th class="centro">Puntos</th><th>Fecha</th><th></th></tr></thead>
     <tbody>${profResultados.map((x, i) => `<tr>
       <td class="pos">${i + 1}</td><td>${escapar(x.nombre)}</td><td>${escapar(x.rol_nombre)}</td><td>${escapar(x.caso_titulo)}</td>
       <td>${x.dureza}</td><td style="white-space:nowrap">${x.hoja_rellenada ? 'Sí' : 'No'} <small style="color:var(--tenue)">${x.hoja_completitud} %</small></td>
