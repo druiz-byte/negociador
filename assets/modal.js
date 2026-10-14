@@ -10,41 +10,34 @@
    Se cierran con la ×, con el botón «Entendido», con Esc o pulsando fuera. */
 
 (function () {
-  const DIMENSIONES = [
-    ['Preparación y objetivos', '¿Llegó con óptimo, satisfactorio y mínimo por variable?',
-      'Improvisa; no distingue lo que quiere de lo que aceptaría.',
-      'Rango claro por variable; sabe en todo momento dónde está respecto a su mínimo.'],
-    ['MAAN', '¿Conoce su alternativa y la usa como poder? ¿Explora la de la contraparte?',
-      'Negocia como si el acuerdo fuera obligatorio.',
-      'Usa su MAAN para sostener posiciones y sondea el de la contraparte.'],
-    ['Preguntas y exploración', '¿Dirige con preguntas? ¿Pasa de la posición a la necesidad?',
-      'Habla más de lo que pregunta; solo preguntas cerradas.',
-      'Pregunta para averiguar, comprender, construir y concretar; descubre una necesidad no declarada.'],
-    ['Escucha activa y autocontrol', '¿Verifica, resume, usa el silencio, mantiene la calma?',
-      'Interrumpe y reacciona a la provocación.',
-      'Resume con las palabras del otro, verifica antes de avanzar y no se descoloca.'],
-    ['Gestión de variables y toma y daca', 'El corazón de la negociación.',
-      'Negocia una sola variable (normalmente el precio).',
-      'Negocia en paquete y concede siempre en formato «si tú… entonces yo…».'],
-    ['Disciplina de concesiones', '¿Concesiones decrecientes y a cambio de algo?',
-      'Concede sin contrapartida o con concesiones crecientes.',
-      'Concesiones decrecientes y siempre a cambio de algo.'],
-    ['Tácticas y contratácticas', '¿Detecta lo que le están haciendo y responde?',
-      'No detecta las tácticas y cae en ellas.',
-      'Identifica la táctica y aplica la contratáctica adecuada sin perder el foco.'],
-    ['Cierre y concreción', 'Nada está acordado hasta que todo está acordado.',
-      'Cierra sin resumir; acuerdos ambiguos.',
-      'Resume el paquete completo punto por punto y pide confirmación explícita.'],
+  // Rúbrica del caso Tecnobit «Operación Punto Crítico» (la misma que usa el
+  // evaluador en negociador-api/src/casos.js): competencia, peso y qué se observa.
+  const COMPETENCIAS = [
+    ['Preparación y estrategia', 10, 'Llega con objetivos, límites y alternativas claros; sabe qué necesita, qué puede ceder y qué pedirá a cambio.'],
+    ['Exploración de intereses', 20, 'Investiga las necesidades reales del cliente, qué hay detrás de cada exigencia y cómo decide, en lugar de quedarse en las posiciones.'],
+    ['Escucha y adaptación', 10, 'Recoge lo que dice el cliente, verifica, resume y ajusta su propuesta a la información nueva.'],
+    ['Argumentación de valor', 10, 'Explica el valor y los riesgos de cada opción con argumentos verificables.'],
+    ['Gestión de presión', 10, 'Mantiene la calma y una relación constructiva ante la urgencia y la amenaza de cambiar de proveedor, sin ceder por ello.'],
+    ['Gestión de concesiones', 15, 'Concede de forma condicionada («si vosotros…, nosotros…»), dentro de sus límites autorizados y a cambio de contrapartidas verificables.'],
+    ['Creación de alternativas', 15, 'Genera opciones que satisfacen intereses de ambas partes.'],
+    ['Cierre y compromisos', 10, 'Cierra un acuerdo concreto y ejecutable: qué, cuándo, precio, aportación de cada parte, autorizaciones pendientes y formalización.'],
+  ];
+  const NIVELES = [
+    ['1 · Reactivo', 'Responde a las exigencias sin explorar ni preparar alternativas.'],
+    ['2 · Básico', 'Identifica algunas necesidades, pero negocia principalmente desde posiciones.'],
+    ['3 · Competente', 'Explora intereses, argumenta valor y plantea intercambios razonables.'],
+    ['4 · Avanzado', 'Identifica prioridades ocultas, construye alternativas y gestiona eficazmente las concesiones.'],
+    ['5 · Experto', 'Integra intereses, riesgos, valor económico y relación comercial en un acuerdo sólido y ejecutable.'],
   ];
 
   const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   const ESTILO = `
     .modal-rubrica { position: fixed; inset: 0; z-index: 180; display: flex; align-items: center; justify-content: center;
-      background: rgba(5, 7, 10, .78); backdrop-filter: blur(3px); padding: 16px; }
+      background: rgba(20, 35, 50, .55); backdrop-filter: blur(3px); padding: 16px; }
     .modal-rubrica .caja { background: var(--fondo-2); border: 1px solid var(--borde); border-radius: 14px;
       max-width: 860px; width: 100%; max-height: calc(100vh - 32px); overflow-y: auto; padding: 26px 28px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.5); position: relative; }
+      box-shadow: 0 20px 60px rgba(28,43,58,.25); position: relative; }
     .modal-rubrica h2 { font-size: 1.3rem; margin-right: 40px; }
     .modal-rubrica .cerrar { position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; border-radius: 50%;
       background: var(--superficie); border: 1px solid var(--borde); color: var(--texto); font-size: 1.2rem; cursor: pointer; line-height: 1; }
@@ -54,7 +47,7 @@
     .modal-rubrica th, .modal-rubrica td { border: 1px solid var(--borde); padding: 8px 10px; text-align: left; vertical-align: top; }
     .modal-rubrica th { background: var(--superficie); font-weight: 600; }
     .modal-rubrica td small { color: var(--tenue); display: block; margin-top: 2px; }
-    .modal-rubrica .nota-baja { color: #f0a9a4; }
+    .modal-rubrica .nota-baja { color: #9e322c; }
     .modal-rubrica .nota-alta { color: var(--verde); }
     .modal-rubrica .formula { font-weight: 650; color: var(--acento); background: var(--acento-suave); border-radius: 8px;
       padding: 10px 14px; margin: 0 0 12px; }
@@ -102,15 +95,20 @@
   }
 
   function construirRubrica() {
-    return crear('modal-rubrica', 'Las ocho dimensiones de la rúbrica', `
-        <p class="intro">Cada dimensión se puntúa de 1 a 5 (máximo 40) y cada nota va acompañada de una cita
-          literal de lo que dijiste. Sin evidencia, la nota es baja.</p>
+    return crear('modal-rubrica', 'Rúbrica de competencias', `
+        <p class="intro">Ocho competencias, de 1 a 5 cada una, con su peso. Cada nota va acompañada de una cita
+          literal de lo que dijiste: sin evidencia, la nota es baja. La media ponderada (1–5) se multiplica por 8
+          (máximo 40 puntos).</p>
         <table>
-          <thead><tr><th>Dimensión</th><th>1 · lo que resta</th><th>4–5 · lo que suma</th></tr></thead>
-          <tbody>${DIMENSIONES.map(([d, q, baja, alta], i) => `<tr>
-            <td><strong>${i + 1}. ${esc(d)}</strong><small>${esc(q)}</small></td>
-            <td class="nota-baja">${esc(baja)}</td>
-            <td class="nota-alta">${esc(alta)}</td></tr>`).join('')}</tbody>
+          <thead><tr><th>Competencia</th><th>Peso</th><th>Qué se observa</th></tr></thead>
+          <tbody>${COMPETENCIAS.map(([c, peso, desc], i) => `<tr>
+            <td><strong>${i + 1}. ${esc(c)}</strong></td>
+            <td class="nota-alta"><strong>${peso} %</strong></td>
+            <td>${esc(desc)}</td></tr>`).join('')}</tbody>
+        </table>
+        <p class="intro" style="margin-top:16px">Interpretación del nivel global:</p>
+        <table>
+          <tbody>${NIVELES.map(([n, d]) => `<tr><td><strong>${esc(n)}</strong></td><td>${esc(d)}</td></tr>`).join('')}</tbody>
         </table>
         <div class="pie">
           <button class="boton fantasma" type="button" data-ir="marco" data-cerrar-modal>Ver el marco completo</button>
