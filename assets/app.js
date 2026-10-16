@@ -26,7 +26,7 @@ const estado = {
   // para no reanudar por error una sesión de un caso/rol distinto al recién elegido.
   sesionCasoId: null,
   sesionRolId: null,
-  avatar: { activo: false, cliente: null, silenciado: false },
+  avatar: { activo: false, cliente: null, silenciado: false, reconexiones: 0 },
   // Firma del historial que devuelve el servidor tras cada intervención de la
   // simulación (ver negociador-api/src/firma.js). Sin ella no se puede puntuar.
   firma: null,
@@ -434,12 +434,44 @@ function ocultarAvatar() {
 
 async function pararAvatar() {
   const av = estado.avatar;
-  if (av.cliente) {
-    try { await av.cliente.stopStreaming(); } catch {}
-  }
+  // Se suelta el cliente ANTES de cerrarlo: así el aviso CONNECTION_CLOSED
+  // sabe que este cierre es intencionado y no intenta reconectar.
+  const cliente = av.cliente;
   av.cliente = null;
   av.activo = false;
+  if (cliente) {
+    try { await cliente.stopStreaming(); } catch {}
+  }
   ocultarAvatar();
+}
+
+/* Si anam.ai cierra la sesión por su cuenta (silencio prolongado, límite de
+   duración del plan, corte de red…) y el participante sigue en la sala con
+   la negociación abierta, se vuelve a conectar el avatar automáticamente.
+   Con tope de reconexiones por entrada en la sala, para no gastar sesiones
+   si el participante ha dejado la pestaña abierta y se ha ido. */
+const MAX_RECONEXIONES_AVATAR = 3;
+
+function sigueEnLaSala() {
+  const sala = document.getElementById('vista-sala');
+  return Boolean(sala && sala.classList.contains('activa'));
+}
+
+function avatarCerradoPorAnam(cliente) {
+  // Cierre intencionado (pararAvatar) o de un cliente ya sustituido: nada que hacer.
+  if (estado.avatar.cliente !== cliente) return;
+  estado.avatar.activo = false;
+  estado.avatar.cliente = null;
+  if (!sigueEnLaSala() || estado.terminada) { ocultarAvatar(); return; }
+  if (estado.avatar.reconexiones >= MAX_RECONEXIONES_AVATAR) {
+    mostrarEstadoAvatar('El avatar se ha desconectado. La negociación sigue por texto.');
+    return;
+  }
+  estado.avatar.reconexiones += 1;
+  mostrarEstadoAvatar('Reconectando el avatar…');
+  setTimeout(() => {
+    if (sigueEnLaSala() && !estado.terminada && !estado.avatar.cliente) iniciarAvatar();
+  }, 1500);
 }
 
 async function iniciarAvatar() {
@@ -473,7 +505,7 @@ async function iniciarAvatar() {
     estado.avatar.cliente = cliente;
 
     cliente.addListener(anam.AnamEvent.SESSION_READY, () => mostrarEstadoAvatar(''));
-    cliente.addListener(anam.AnamEvent.CONNECTION_CLOSED, () => { estado.avatar.activo = false; });
+    cliente.addListener(anam.AnamEvent.CONNECTION_CLOSED, () => avatarCerradoPorAnam(cliente));
 
     await cliente.streamToVideoElement('avatar-video');
     const video = $('#avatar-video');
@@ -517,11 +549,13 @@ function entrarEnLaSala() {
     // anterior con otra configuración rompería la firma y no podría puntuar.
     estado.sesionDureza === estado.config.dureza &&
     estado.sesionModo === (compite ? 'contraparte' : estado.config.modo);
+  estado.avatar.reconexiones = 0;
   if (esLaMismaSesion) { ir('sala'); iniciarAvatar(); return; }
 
   estado.mensajes = [];
   estado.terminada = false;
   estado.firma = null;
+  marcarPrepUsada();
   estado.sesionCasoId = estado.caso.id;
   estado.sesionRolId = estado.rolId;
   estado.sesionCompite = compite;
@@ -953,13 +987,21 @@ inicializarDictado();
 
 /* ─────────── Hoja de preparación ─────────── */
 
+/* La hoja vive en sessionStorage (no en localStorage): sobrevive a una
+   recarga de la página, pero cada acceso nuevo (otra pestaña, otro día,
+   otro participante en el mismo ordenador del aula) empieza con la hoja en
+   blanco. Además, en cuanto una hoja se ha usado en una negociación, al
+   pedir el briefing de un intento nuevo se borra (ver marcarPrepUsada). */
 const CLAVE_PREP = 'negociador-preparacion-v1';
 
+// Restos de la versión anterior, que guardaba la hoja en localStorage para siempre.
+try { localStorage.removeItem(CLAVE_PREP); } catch {}
+
 function leerPrep() {
-  try { return JSON.parse(localStorage.getItem(CLAVE_PREP)) || {}; } catch { return {}; }
+  try { return JSON.parse(sessionStorage.getItem(CLAVE_PREP)) || {}; } catch { return {}; }
 }
 function escribirPrep(datos) {
-  localStorage.setItem(CLAVE_PREP, JSON.stringify(datos));
+  try { sessionStorage.setItem(CLAVE_PREP, JSON.stringify(datos)); } catch {}
   const aviso = $('#aviso-guardado');
   aviso.classList.add('visible');
   clearTimeout(escribirPrep._t);
@@ -967,9 +1009,23 @@ function escribirPrep(datos) {
 }
 
 function guardarVariablesEnPreparacion(variables) {
-  const datos = leerPrep();
+  // Intento nuevo: si la hoja ya se usó en una negociación anterior, se
+  // empieza en blanco en lugar de arrastrar lo que se escribió entonces.
+  const datos = leerPrep().usada ? {} : leerPrep();
+  if (!datos.campos) vaciarCamposPrep();
   datos.variables = variables;
   escribirPrep(datos);
+}
+
+// Marca la hoja como usada al empezar una negociación nueva en la sala.
+function marcarPrepUsada() {
+  const datos = leerPrep();
+  datos.usada = true;
+  try { sessionStorage.setItem(CLAVE_PREP, JSON.stringify(datos)); } catch {}
+}
+
+function vaciarCamposPrep() {
+  $$('[data-prep]').forEach((el) => (el.value = ''));
 }
 
 function montarTablasPreparacion() {
@@ -1028,8 +1084,8 @@ function restaurarPrep() {
 
 $('#btn-borrar-prep').addEventListener('click', () => {
   if (!confirm('Se borrará toda tu hoja de preparación. ¿Seguro?')) return;
-  localStorage.removeItem(CLAVE_PREP);
-  $$('[data-prep]').forEach((el) => (el.value = ''));
+  try { sessionStorage.removeItem(CLAVE_PREP); } catch {}
+  vaciarCamposPrep();
 });
 
 /* ─── Descarga de la hoja en PDF ───
@@ -1881,7 +1937,7 @@ $('#form-competicion').addEventListener('submit', async (e) => {
     nota.textContent = '';
     pintarCompeticion();
   } catch (err) {
-    nota.textContent = 'No se ha podido contactar con el servidor. Reinténtalo en un momento.';
+    nota.textContent = 'No se ha podido contactar con el servidor. Reinéntalo en un momento.';
   } finally {
     btn.disabled = !estado.competicion.disponible;
   }
@@ -2237,3 +2293,4 @@ if (!API || API.includes('PON-AQUI')) {
 
 cargarCasos();
 montarTablasPreparacion();
+
