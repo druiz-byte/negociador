@@ -1937,7 +1937,7 @@ $('#form-competicion').addEventListener('submit', async (e) => {
     nota.textContent = '';
     pintarCompeticion();
   } catch (err) {
-    nota.textContent = 'No se ha podido contactar con el servidor. Reinéntalo en un momento.';
+    nota.textContent = 'No se ha podido contactar con el servidor. Reinténtalo en un momento.';
   } finally {
     btn.disabled = !estado.competicion.disponible;
   }
