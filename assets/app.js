@@ -1,4 +1,6 @@
-/* NegoLab (edición Tecnobit) — front-end
+/* NegoLab (multiempresa) — front-end
+   La web es la misma para todas las empresas: al entrar con el código de
+   grupo, el servidor devuelve la empresa (logo, colores, textos) y sus casos.
    Sin dependencias externas. Todo el estado vive en el navegador;
    las fichas confidenciales de la simulación nunca llegan hasta aquí. */
 
@@ -8,6 +10,8 @@
 const API = (window.NEGOCIADOR_API || '').replace(/\/+$/, '');
 
 const estado = {
+  // Grupo con el que se ha entrado: { codigo, nombreGrupo, abierto, empresa }.
+  acceso: null,
   casos: [],
   filtro: 'todos',
   caso: null,
@@ -111,12 +115,14 @@ function md(texto) {
 /* ─────────── Navegación ─────────── */
 
 const VISTAS_VALIDAS = [
-  'inicio', 'casos', 'configurar', 'briefing', 'sala', 'preparacion', 'marco',
+  'acceso', 'inicio', 'casos', 'configurar', 'briefing', 'sala', 'preparacion', 'marco',
   'competicion', 'profesor', 'aviso-legal', 'privacidad', 'cookies',
 ];
 // Vistas que se pueden abrir directamente con un enlace (negolab.es/#privacidad):
 // las que no dependen de haber elegido antes un caso.
 const VISTAS_DIRECTAS = ['inicio', 'casos', 'preparacion', 'marco', 'competicion', 'profesor', 'aviso-legal', 'privacidad', 'cookies'];
+// Vistas que se pueden ver sin haber entrado con un código de grupo.
+const VISTAS_SIN_ACCESO = ['acceso', 'profesor', 'aviso-legal', 'privacidad', 'cookies'];
 
 /* Cada vista queda registrada en el historial del navegador (con
    history.pushState) para que la flecha "atrás" del navegador vuelva a la
@@ -125,6 +131,8 @@ const VISTAS_DIRECTAS = ['inicio', 'casos', 'preparacion', 'marco', 'competicion
 function ir(vista, opciones = {}) {
   const { registrarHistorial = true } = opciones;
   if (!VISTAS_VALIDAS.includes(vista)) vista = 'inicio';
+  if (!estado.acceso && !VISTAS_SIN_ACCESO.includes(vista)) vista = 'acceso';
+  if (estado.acceso && vista === 'acceso') vista = 'inicio';
 
   const activaAntes = $('.vista.activa');
   const veniaDeSala = activaAntes && activaAntes.id === 'vista-sala';
@@ -135,7 +143,6 @@ function ir(vista, opciones = {}) {
   window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   if (vista === 'preparacion') { montarTablasPreparacion(); actualizarNotaPrep(); }
   if (vista === 'competicion') pintarCompeticion();
-  else pararRefrescoRanking();
   if (vista === 'profesor') pintarProfesor();
   // El avatar cuesta por minuto conectado: si salimos de la sala por la
   // navegación superior (no por "Salir"), lo cerramos igual que allí.
@@ -156,7 +163,7 @@ function ir(vista, opciones = {}) {
    ningún caso elegido en esta carga de página), no puede reconstruirse:
    en ese caso llevamos a la biblioteca de casos en vez de a una vista rota. */
 window.addEventListener('popstate', (e) => {
-  let vista = (e.state && e.state.vista) || 'inicio';
+  let vista = (e.state && e.state.vista) || (estado.acceso ? 'inicio' : 'acceso');
   const necesitaCaso = ['configurar', 'briefing', 'sala'].includes(vista);
   const necesitaBriefing = ['briefing', 'sala'].includes(vista);
   if ((necesitaCaso && !estado.caso) || (necesitaBriefing && !estado.briefing)) {
@@ -204,45 +211,208 @@ function despertarServidor() {
       estado.competicion.disponible = Boolean(d && d.competicion);
       estado.competicion.reglas = (d && d.reglas) || null;
       actualizarDisponibilidadCompeticion();
+      pintarReglas();
     })
     .catch(() => {});
 }
 
-async function cargarCasos({ intento = 1 } = {}) {
-  const lista = $('#lista-casos');
-  lista.innerHTML = '<p style="color:var(--tenue)">Cargando casos…</p>';
+/* ─────────── Acceso por código de grupo ───────────
+   El código decide la empresa: su imagen, sus textos y sus casos. Se guarda
+   en el navegador para no pedirlo cada vez; "Cambiar de grupo" lo olvida. */
 
+const CLAVE_ACCESO = 'negociador-acceso-v1';
+
+function leerAccesoGuardado() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_ACCESO)) || null; } catch { return null; }
+}
+
+async function entrarConCodigo(codigo, { intento = 1, desdeFormulario = false, vistaInicial = 'inicio' } = {}) {
+  const nota = $('#nota-acceso');
+  const btn = $('#btn-acceso');
+  btn.disabled = true;
+  nota.textContent = intento === 1 ? 'Comprobando el código…' : `Despertando el servidor… (intento ${intento} de 3)`;
   const aviso = setTimeout(() => {
-    lista.innerHTML = `<div class="aviso info">
-      <strong>Despertando el servidor…</strong><br>
-      El simulador se apaga cuando nadie lo usa y tarda cerca de un minuto en volver.
-      Solo pasa la primera vez; a partir de ahí va inmediato.
-    </div>`;
+    nota.textContent = 'Despertando el servidor… El simulador se apaga cuando nadie lo usa y tarda cerca de un minuto en volver.';
   }, 4000);
-
   try {
-    const r = await fetch(`${API}/api/casos`, { cache: 'no-store' });
+    const r = await fetch(`${API}/api/grupos/${encodeURIComponent(codigo)}`, { cache: 'no-store' });
     clearTimeout(aviso);
-    if (!r.ok) throw new Error('respuesta ' + r.status);
-    const datos = await r.json();
+    let datos = {};
+    try { datos = await r.json(); } catch {}
+    if (!r.ok) {
+      // Código que ya no existe (grupo borrado): se olvida y se vuelve a pedir.
+      if (r.status === 404) { try { localStorage.removeItem(CLAVE_ACCESO); } catch {} }
+      if (r.status >= 500 && intento < 3) { await esperar(6000); return entrarConCodigo(codigo, { intento: intento + 1, desdeFormulario, vistaInicial }); }
+      nota.textContent = datos.error || 'No se ha podido comprobar el código.';
+      if (!desdeFormulario) ir('acceso', { registrarHistorial: false });
+      return false;
+    }
+    estado.acceso = {
+      codigo: datos.grupo.codigo,
+      nombreGrupo: datos.grupo.nombre,
+      abierto: datos.grupo.abierto,
+      empresa: datos.empresa,
+    };
+    try { localStorage.setItem(CLAVE_ACCESO, JSON.stringify({ codigo: datos.grupo.codigo })); } catch {}
     estado.casos = datos.casos || [];
+    estado.filtro = 'todos';
+    aplicarEmpresa(datos.empresa);
     pintarFiltros();
     pintarCasos();
+    pintarMarco();
+    nota.textContent = '';
+    $('#acceso-codigo').value = '';
+    ir(vistaInicial);
+    return true;
   } catch (err) {
     clearTimeout(aviso);
-    if (intento < 3) {
-      lista.innerHTML = `<div class="aviso info">Despertando el servidor… (intento ${intento + 1} de 3)</div>`;
-      await esperar(6000);
-      return cargarCasos({ intento: intento + 1 });
-    }
-    lista.innerHTML = `<div class="aviso">
-      No se ha podido contactar con el servidor del simulador. Puede estar caído o en mantenimiento.
-      <br><br><button class="boton secundario" id="btn-reintentar">Reintentar</button>
-      <br><br><small>Detalle técnico: ${escapar(String(err.message || err))}</small>
-    </div>`;
-    const b = $('#btn-reintentar');
-    if (b) b.addEventListener('click', () => cargarCasos());
+    if (intento < 3) { await esperar(6000); return entrarConCodigo(codigo, { intento: intento + 1, desdeFormulario, vistaInicial }); }
+    nota.textContent = 'No se ha podido contactar con el servidor del simulador. Reinténtalo en un momento.';
+    if (!desdeFormulario) ir('acceso', { registrarHistorial: false });
+    return false;
+  } finally {
+    btn.disabled = false;
   }
+}
+
+$('#form-acceso').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const codigo = $('#acceso-codigo').value.trim().toUpperCase();
+  if (codigo.length < 4) { $('#nota-acceso').textContent = 'Escribe el código completo.'; return; }
+  entrarConCodigo(codigo, { desdeFormulario: true });
+});
+
+const VARIABLES_COLOR = {
+  acento: '--acento', acento2: '--acento-2', azul: '--azul', fondo: '--fondo',
+  superficie: '--superficie', borde: '--borde', texto: '--texto', tenue: '--tenue',
+};
+const TITULO_NEUTRO = document.title;
+
+function hexARgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/* Viste la web con la imagen de la empresa. Los textos vienen de nuestro
+   propio servidor (empresas.js), por eso se insertan como HTML. */
+function aplicarEmpresa(empresa) {
+  const raiz = document.documentElement.style;
+  const colores = (empresa.marca && empresa.marca.colores) || {};
+  Object.entries(VARIABLES_COLOR).forEach(([clave, variable]) => {
+    if (colores[clave]) raiz.setProperty(variable, colores[clave]);
+    else raiz.removeProperty(variable);
+  });
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta && colores.acento) meta.setAttribute('content', colores.acento);
+
+  const img = $('#logo-empresa');
+  const texto = $('#logo-texto');
+  if (empresa.marca && empresa.marca.logo) {
+    img.src = empresa.marca.logo;
+    img.alt = empresa.marca.logoAlt || empresa.nombre;
+    img.classList.remove('oculto');
+    texto.classList.add('oculto');
+  } else {
+    img.classList.add('oculto');
+    img.removeAttribute('src');
+    texto.textContent = empresa.nombre;
+    texto.classList.remove('oculto');
+  }
+
+  const t = empresa.textos || {};
+  $$('[data-texto]').forEach((el) => { el.innerHTML = t[el.dataset.texto] || ''; });
+  document.title = t.titulo || `NegoLab · ${empresa.nombre}`;
+  $$('[data-empresa-pie]').forEach((el) => { el.textContent = ` · ${empresa.nombreCorto || empresa.nombre}`; });
+  pintarGrupoActivo();
+  document.body.classList.remove('sin-acceso');
+
+  // PDF: misma paleta y mismo logotipo que la web.
+  Object.assign(COLOR_PDF, COLOR_PDF_NEUTRO);
+  const rgb = (c) => hexARgb(colores[c]);
+  if (rgb('acento')) COLOR_PDF.acento = rgb('acento');
+  if (rgb('fondo')) COLOR_PDF.fondo2 = rgb('fondo');
+  if (rgb('superficie')) COLOR_PDF.superficie = rgb('superficie');
+  if (rgb('borde')) COLOR_PDF.borde = rgb('borde');
+  if (rgb('texto')) COLOR_PDF.texto = rgb('texto');
+  if (rgb('tenue')) COLOR_PDF.tenue = rgb('tenue');
+  marcaPdf = (empresa.nombreCorto || empresa.nombre || '').toUpperCase();
+  cargarLogoPdf(empresa.marca && empresa.marca.logo);
+}
+
+function pintarGrupoActivo() {
+  const caja = $('#grupo-activo');
+  if (!caja) return;
+  if (!estado.acceso) { caja.innerHTML = ''; return; }
+  caja.innerHTML = `Grupo: <strong>${escapar(estado.acceso.nombreGrupo)}</strong> (${escapar(estado.acceso.codigo)}) ·
+    <button type="button" data-salir-grupo>Cambiar de grupo</button>`;
+}
+
+function salirDelGrupo() {
+  if (estado.mensajes.length && !estado.terminada &&
+      !confirm('Tienes una negociación sin terminar. Si cambias de grupo se perderá. ¿Continuar?')) return;
+  pararAvatar();
+  try { localStorage.removeItem(CLAVE_ACCESO); } catch {}
+  estado.acceso = null;
+  estado.casos = [];
+  estado.caso = null;
+  estado.rolId = null;
+  estado.briefing = null;
+  estado.mensajes = [];
+  estado.terminada = false;
+  estado.firma = null;
+  Object.values(VARIABLES_COLOR).forEach((v) => document.documentElement.style.removeProperty(v));
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', '#2b3a55');
+  $('#logo-empresa').classList.add('oculto');
+  $('#logo-texto').classList.add('oculto');
+  $$('[data-texto]').forEach((el) => { el.innerHTML = ''; });
+  $$('[data-empresa-pie]').forEach((el) => { el.textContent = ''; });
+  document.title = TITULO_NEUTRO;
+  Object.assign(COLOR_PDF, COLOR_PDF_NEUTRO);
+  logoPdf = null;
+  marcaPdf = '';
+  document.body.classList.add('sin-acceso');
+  pintarGrupoActivo();
+  ir('acceso');
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-salir-grupo]')) { e.preventDefault(); salirDelGrupo(); }
+});
+
+/* La rúbrica y las reglas de puntuación que se publican son las del caso de
+   la empresa (con un solo caso por empresa, la del primero). */
+function pintarMarco() {
+  const caso = estado.casos[0];
+  const rubrica = (caso && caso.rubrica) || [];
+  $('#marco-rubrica').innerHTML = rubrica
+    .map((c) => `<tr><td><strong>${escapar(c.nombre)}</strong></td><td>${escapar(c.descriptor || '')}</td><td class="peso">${escapar(String(c.peso))} %</td></tr>`)
+    .join('');
+  const niveles = (caso && caso.niveles) || [];
+  window.NEGOLAB_RUBRICA = { competencias: rubrica, niveles };
+  $('#marco-niveles').innerHTML = niveles
+    .map((n) => {
+      const [cab, ...resto] = n.split(':');
+      return `<tr><td><strong>${escapar(cab.replace(/^Nivel\s*/, ''))}</strong></td><td>${escapar(resto.join(':').trim())}</td></tr>`;
+    })
+    .join('');
+  pintarReglas();
+}
+
+function pintarReglas() {
+  const caso = estado.casos[0];
+  const reglas = estado.competicion.reglas;
+  if (!caso || !caso.configFija || !reglas || !reglas.factorDureza) return;
+  const d = caso.configFija.dureza;
+  const factor = reglas.factorDureza[d] || 1;
+  const nombres = { 1: 'inicial', 2: 'intermedio', 3: 'avanzado', 4: 'experto' };
+  const f = (n) => String(n).replace('.', ',');
+  const max = Math.round((reglas.rubricaMax + reglas.resultadoMax) * factor * 10) / 10;
+  $('#reglas-factor-formula').textContent = f(factor);
+  $('#reglas-factor').textContent = `Nivel ${nombres[d] || d} (${d}/4), igual para todos: ×${f(factor)}`;
+  $('#reglas-maximo').innerHTML = `Máximo posible: (${reglas.rubricaMax} + ${reglas.resultadoMax}) × ${f(factor)} = <strong>${f(max)} puntos</strong>.`;
 }
 
 function pintarFiltros() {
@@ -357,7 +527,7 @@ $('#btn-empezar').addEventListener('click', async () => {
     const r = await fetch(`${API}/api/briefing`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ casoId: estado.caso.id, rolId: estado.rolId }),
+      body: JSON.stringify({ grupo: estado.acceso.codigo, casoId: estado.caso.id, rolId: estado.rolId }),
     });
     const datos = await r.json();
     if (!r.ok) throw new Error(datos.error || 'error');
@@ -488,7 +658,7 @@ async function iniciarAvatar() {
       fetch(`${API}/api/avatar-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ casoId: estado.caso.id, rolId: estado.rolId }),
+        body: JSON.stringify({ grupo: estado.acceso.codigo, casoId: estado.caso.id, rolId: estado.rolId }),
       }),
     ]);
 
@@ -672,6 +842,7 @@ async function hablarConSimulacion() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        grupo: estado.acceso.codigo,
         casoId: estado.caso.id,
         rolId: estado.rolId,
         config: estado.config,
@@ -886,7 +1057,7 @@ $$('[data-atajo]').forEach((b) =>
     const esFin = b.dataset.atajo.startsWith('FIN');
     if (esFin && estado.sesionCompite) {
       if (estado.terminada || estado.ocupado || estado.evaluando) return;
-      if (!confirm('Se cerrará la negociación y el evaluador independiente calculará tu puntuación para el ranking. ¿Continuar?')) return;
+      if (!confirm('Se cerrará la negociación y el evaluador independiente calculará tu puntuación, que quedará guardada para tu profesor. ¿Continuar?')) return;
       evaluarCompeticion();
       return;
     }
@@ -1094,28 +1265,49 @@ $('#btn-borrar-prep').addEventListener('click', () => {
 
 const SIN_RESPUESTA = 'No contestado';
 
-// Logotipo de Tecnobit para la cabecera de los PDF. Se precarga como data URL
-// al abrir la web; si no se pudiera cargar, el PDF sale igual sin logotipo.
+// Logotipo de la empresa para la cabecera de los PDF: { datos, ancho, alto }.
+// Se precarga como data URL al entrar con el código; si no se pudiera
+// cargar (o la empresa no tiene logo), el PDF sale igual sin logotipo.
 let logoPdf = null;
-fetch('assets/tecnobit-logo.svg')
-  .then((r) => (r.ok ? r.text() : ''))
-  .then((svg) => {
-    // El SVG solo envuelve un PNG: jsPDF necesita ese PNG como data URL.
-    const m = svg.match(/href="(data:image\/png;base64,[^"]+)"/);
-    if (m) logoPdf = m[1];
-  })
-  .catch(() => {});
+let marcaPdf = '';
 
-// Paleta corporativa de Tecnobit, igual que la web.
-const COLOR_PDF = {
+function cargarLogoPdf(url) {
+  logoPdf = null;
+  if (!url) return;
+  const conMedidas = (datos) => {
+    const im = new Image();
+    im.onload = () => { logoPdf = { datos, ancho: im.naturalWidth || 1, alto: im.naturalHeight || 1 }; };
+    im.src = datos;
+  };
+  fetch(url)
+    .then((r) => (r.ok ? r.blob() : null))
+    .then((blob) => {
+      if (!blob) return;
+      if (blob.type.includes('svg')) {
+        // Un SVG que solo envuelve un PNG (como el de Tecnobit): jsPDF necesita ese PNG.
+        return blob.text().then((svg) => {
+          const m = svg.match(/href="(data:image\/png;base64,[^"]+)"/);
+          if (m) conMedidas(m[1]);
+        });
+      }
+      const lector = new FileReader();
+      lector.onload = () => conMedidas(lector.result);
+      lector.readAsDataURL(blob);
+    })
+    .catch(() => {});
+}
+
+// Paleta de los PDF: neutra por defecto; aplicarEmpresa() pone la de la empresa.
+const COLOR_PDF_NEUTRO = {
   fondo: [255, 255, 255],
-  fondo2: [243, 246, 249],
-  superficie: [234, 240, 245],
-  borde: [211, 221, 230],
-  texto: [28, 43, 58],
-  tenue: [91, 109, 128],
-  acento: [49, 86, 122],
+  fondo2: [244, 245, 247],
+  superficie: [235, 237, 241],
+  borde: [214, 218, 225],
+  texto: [29, 36, 48],
+  tenue: [92, 102, 118],
+  acento: [43, 58, 85],
 };
+const COLOR_PDF = { ...COLOR_PDF_NEUTRO };
 
 /* La librería viaja con la web (assets/vendor/), así que el PDF también
    funciona en redes que bloquean CDN externas. Si el fichero faltara,
@@ -1167,7 +1359,7 @@ function crearConstructorPdf(doc) {
   const fondo = () => { doc.setFillColor(...COLOR_PDF.fondo); doc.rect(0, 0, ANCHO_PAG, ALTO_PAG, 'F'); };
   const pie = () => {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...COLOR_PDF.tenue);
-    doc.text('NegoLab · Tecnobit — simulador de negociación', M, ALTO_PAG - 10);
+    doc.text(`NegoLab${marcaPdf ? ' · ' + (estado.acceso && estado.acceso.empresa ? estado.acceso.empresa.nombreCorto || marcaPdf : marcaPdf) : ''} — simulador de negociación`, M, ALTO_PAG - 10);
     doc.text(String(pos.pagina), ANCHO_PAG - M, ALTO_PAG - 10, { align: 'right' });
   };
   const saltarPagina = () => { pie(); doc.addPage(); pos.pagina++; fondo(); pos.y = M + 8; };
@@ -1179,9 +1371,14 @@ function crearConstructorPdf(doc) {
     doc.setFillColor(...COLOR_PDF.acento);
     doc.rect(0, 0, ANCHO_PAG, 2.2, 'F');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...COLOR_PDF.acento);
-    doc.text('NEGOLAB · TECNOBIT', M, pos.y);
+    doc.text(marcaPdf ? `NEGOLAB · ${marcaPdf}` : 'NEGOLAB', M, pos.y);
     if (logoPdf) {
-      try { doc.addImage(logoPdf, 'PNG', ANCHO_PAG - M - 28, pos.y - 6.5, 28, 9.9); } catch {}
+      // Cabe en una caja de 28 × 10 mm, respetando la proporción del logotipo.
+      const escala = Math.min(28 / logoPdf.ancho, 10 / logoPdf.alto);
+      const w = logoPdf.ancho * escala;
+      const h = logoPdf.alto * escala;
+      const formato = /^data:image\/jpe?g/.test(logoPdf.datos) ? 'JPEG' : 'PNG';
+      try { doc.addImage(logoPdf.datos, formato, ANCHO_PAG - M - w, pos.y - 6.5, w, h); } catch {}
     }
     pos.y += 10;
     doc.setFontSize(19); doc.setTextColor(...COLOR_PDF.texto);
@@ -1567,7 +1764,12 @@ function escribirLocal(clave, valor) {
   try { localStorage.setItem(clave, JSON.stringify(valor)); } catch {}
 }
 
-const leerInscripcion = () => leerLocal(CLAVE_INSCRIPCION, null);
+// La inscripción (nombre o alias + consentimiento) vale solo para el grupo con
+// el que se ha entrado: si se cambia de grupo, hay que registrarse otra vez.
+const leerInscripcion = () => {
+  const ins = leerLocal(CLAVE_INSCRIPCION, null);
+  return ins && estado.acceso && ins.codigo === estado.acceso.codigo ? ins : null;
+};
 const leerMisResultados = () => leerLocal(CLAVE_MIS_RESULTADOS, []);
 function guardarMiResultado(r) {
   const lista = leerMisResultados().filter((x) => x.id !== r.id);
@@ -1617,19 +1819,19 @@ function pintarCompeticionEnConfigurador() {
   const ins = leerInscripcion();
   const caja = $('#competicion-config');
   if (!ins) {
-    caja.innerHTML = `<p class="ayuda" style="margin:0 0 12px">¿Tu profesor te ha dado un código de grupo?
-      Apúntate con tu nombre o un alias y esta negociación puntuará en el ranking. Si no, recibirás igualmente tu feedback.</p>
-      <button class="boton secundario" type="button" data-ir="competicion">Apuntarme a una competición</button>`;
+    caja.innerHTML = `<p class="ayuda" style="margin:0 0 12px">Regístrate con tu nombre o un alias y el resultado de esta
+      negociación quedará guardado para tu profesor. Si no, recibirás igualmente tu feedback.</p>
+      <button class="boton secundario" type="button" data-ir="competicion">Registrarme</button>`;
     aplicarBloqueoModo();
     return;
   }
   caja.innerHTML = `<label class="casilla">
       <input type="checkbox" id="chk-puntua" ${estado.competicion.puntua ? 'checked' : ''}>
-      <span>Esta negociación puntúa en <strong>${escapar(ins.nombreGrupo || ins.codigo)}</strong> (${escapar(ins.codigo)})
+      <span>Registrar el resultado de esta negociación en <strong>${escapar(ins.nombreGrupo || ins.codigo)}</strong>
       como <strong>${escapar(ins.nombre)}</strong>.</span>
     </label>
     <p class="ayuda" style="margin:10px 0 0">Al pulsar «Fin de la simulación» te puntúa un evaluador independiente y tu
-      resultado entra en el ranking del grupo con tu nombre o alias.
+      resultado queda guardado para tu profesor. Tú ves tus puntos y tu informe; el ranking solo lo ve el profesor.
       <a href="#" data-desplazar-reglas>Cómo se puntúa</a>.</p>`;
   $('#chk-puntua').addEventListener('change', (e) => {
     estado.competicion.puntua = e.target.checked;
@@ -1663,7 +1865,7 @@ function bloquearComposicion(bloquear) {
 async function evaluarCompeticion() {
   if (estado.evaluando || estado.terminada || estado.ocupado) return;
   const ins = leerInscripcion();
-  if (!ins) { turno('sistema', 'Ya no estás apuntado a ninguna competición, así que esta negociación no puede puntuar.', ''); return; }
+  if (!ins) { turno('sistema', 'Ya no estás registrado en este grupo, así que esta negociación no puede guardarse.', ''); return; }
 
   estado.evaluando = true;
   bloquearComposicion(true);
@@ -1745,6 +1947,7 @@ async function evaluarLibre() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        grupo: estado.acceso.codigo,
         casoId: estado.caso.id,
         rolId: estado.rolId,
         config: estado.config,
@@ -1769,7 +1972,7 @@ async function evaluarLibre() {
     div.querySelector('.texto').innerHTML = `<div class="resultado-competicion">
         <div class="cifra">${fmtNum(p.puntos)} puntos</div>
         <div>(${fmtNum(p.rubrica)} de rúbrica + ${fmtNum(p.resultado)} de resultado) × ${fmtNum(p.factor)} por nivel ·
-          no se ha registrado en ningún ranking</div>
+          no se ha registrado</div>
       </div>` + md(datos.informe);
     const barra = document.createElement('div');
     barra.className = 'barra-accion';
@@ -1785,14 +1988,14 @@ async function evaluarLibre() {
     barra.appendChild(bPdf);
     if (estado.competicion.disponible) {
       const bComp = document.createElement('button');
-      bComp.type = 'button'; bComp.className = 'boton fantasma'; bComp.textContent = 'Apuntarme a la competición';
+      bComp.type = 'button'; bComp.className = 'boton fantasma'; bComp.textContent = 'Registrarme para guardar mis resultados';
       bComp.addEventListener('click', () => ir('competicion'));
       barra.appendChild(bComp);
     }
     div.appendChild(barra);
     $('#conversacion').scrollTop = div.offsetTop - 20;
     turno('sistema', 'Simulación cerrada. Puedes repetir el caso desde «El caso» todas las veces que quieras' +
-      (estado.competicion.disponible ? '; si tienes código de grupo, apúntate a la competición para entrar en el ranking.' : '.'), '');
+      (estado.competicion.disponible ? '; regístrate en «Resultados» para que se guarden para tu profesor.' : '.'), '');
   } catch (err) {
     aviso.querySelector('.texto').innerHTML =
       `<span style="color:var(--rojo)">Error de conexión: ${escapar(String(err.message || err))}</span>
@@ -1806,12 +2009,12 @@ async function evaluarLibre() {
 
 function pintarInformeOficial(datos, meta, hoja) {
   const p = datos.puntos;
-  const div = turno('informe', '', 'Evaluación oficial de la competición');
+  const div = turno('informe', '', 'Evaluación oficial');
   const caja = div.querySelector('.texto');
   caja.innerHTML = `<div class="resultado-competicion">
       <div class="cifra">${fmtNum(p.puntos)} puntos</div>
-      <div>Puesto <strong>${datos.posicion}</strong> en el ranking de tu grupo ahora mismo ·
-        (${fmtNum(p.rubrica)} de rúbrica + ${fmtNum(p.resultado)} de resultado) × ${fmtNum(p.factor)} por nivel</div>
+      <div>(${fmtNum(p.rubrica)} de rúbrica + ${fmtNum(p.resultado)} de resultado) × ${fmtNum(p.factor)} por nivel ·
+        guardado para tu profesor</div>
     </div>` + md(datos.informe);
 
   const barra = document.createElement('div');
@@ -1836,10 +2039,10 @@ function pintarInformeOficial(datos, meta, hoja) {
       conBotonOcupado(e.target, () => descargarHojaPdf(hoja, { caso: meta.caso, rol: meta.rol, fecha: meta.fecha }), () => descargarHojaMarkdown(hoja, { caso: meta.caso, rol: meta.rol }))
     );
   }
-  boton('Ver el ranking', '', () => ir('competicion'));
+  boton('Ver mis resultados', '', () => ir('competicion'));
   div.appendChild(barra);
   $('#conversacion').scrollTop = div.offsetTop - 20;
-  turno('sistema', 'Simulación cerrada y registrada en el ranking. Puedes repetir el caso desde «El caso» todas las veces que quieras.', '');
+  turno('sistema', 'Simulación cerrada y guardada para tu profesor. Puedes repetir el caso desde «El caso» todas las veces que quieras.', '');
 }
 
 async function conBotonOcupado(boton, generar, respaldo) {
@@ -1858,14 +2061,9 @@ async function conBotonOcupado(boton, generar, respaldo) {
   }
 }
 
-/* ─── Vista de competición: inscripción y ranking ─── */
-
-let rankingDatos = null;
-let temporizadorRanking = null;
-
-function pararRefrescoRanking() {
-  if (temporizadorRanking) { clearInterval(temporizadorRanking); temporizadorRanking = null; }
-}
+/* ─── Vista de resultados: registro y mis resultados ───
+   No hay ranking público: el participante ve solo sus propios resultados
+   (los que registró desde este navegador). El ranking lo ve el profesor. */
 
 function pintarCompeticion() {
   $('#comp-no-disponible').classList.toggle('oculto', estado.competicion.disponible);
@@ -1874,176 +2072,73 @@ function pintarCompeticion() {
   const estadoCaja = $('#comp-estado');
 
   if (ins) {
-    $('#comp-titulo-inscripcion').textContent = 'Tu inscripción';
+    $('#comp-titulo-inscripcion').textContent = 'Tu registro';
     form.classList.add('oculto');
     estadoCaja.innerHTML = `<div class="inscripcion-activa">
-        Estás en <strong>${escapar(ins.nombreGrupo || ins.codigo)}</strong> (${escapar(ins.codigo)})
+        Estás registrado en <strong>${escapar(ins.nombreGrupo || ins.codigo)}</strong>
         como <strong>${escapar(ins.nombre)}</strong>.
-        ${ins.abierto === false ? '<br><span style="color:var(--rojo)">Esta simulación está cerrada: ya no admite resultados nuevos.</span>' : ''}
+        ${estado.acceso && estado.acceso.abierto === false ? '<br><span style="color:var(--rojo)">Este grupo está cerrado: ya no admite resultados nuevos.</span>' : ''}
       </div>
       <div class="barra-accion">
-        <button class="boton" type="button" data-ir="casos">Elegir un caso y competir</button>
-        <button class="boton fantasma" type="button" id="btn-comp-salir">Cambiar de grupo o de nombre</button>
+        <button class="boton" type="button" data-ir="casos">Ir al caso</button>
+        <button class="boton fantasma" type="button" id="btn-comp-salir">Cambiar de nombre</button>
       </div>`;
     $('#btn-comp-salir').addEventListener('click', () => {
-      if (!confirm('Dejarás de competir en este grupo desde este navegador. Tus resultados siguen en el ranking y podrás volver a apuntarte con el mismo código. ¿Continuar?')) return;
+      if (!confirm('Los resultados que ya has registrado se quedan con el nombre anterior. ¿Continuar?')) return;
       localStorage.removeItem(CLAVE_INSCRIPCION);
-      $('#comp-codigo').value = ins.codigo;
       $('#comp-nombre').value = ins.nombre;
       pintarCompeticion();
     });
-    $('#comp-ranking-bloque').classList.remove('oculto');
-    // Ya inscrito, lo que interesa es el ranking: va arriba, antes de las reglas.
-    $('#comp-cuerpo').before($('#comp-ranking-bloque'));
-    $('#rk-grupo').textContent = `${ins.nombreGrupo || ''} · ${ins.codigo}`;
-    if (estado.competicion.disponible) {
-      cargarRanking();
-      pararRefrescoRanking();
-      // Para proyectarlo en clase: se refresca solo mientras la vista está abierta.
-      temporizadorRanking = setInterval(() => { if (!document.hidden) cargarRanking(); }, 30000);
-    }
   } else {
-    $('#comp-titulo-inscripcion').textContent = 'Apúntate';
+    $('#comp-titulo-inscripcion').textContent = 'Regístrate';
     form.classList.remove('oculto');
     estadoCaja.innerHTML = '';
-    $('#comp-ranking-bloque').classList.add('oculto');
-    $('#comp-cuerpo').after($('#comp-ranking-bloque'));
-    pararRefrescoRanking();
   }
-  $('#btn-comp-entrar').disabled = !estado.competicion.disponible;
+  $('#btn-comp-entrar').disabled = !estado.competicion.disponible || !estado.acceso;
+  pintarMisResultados();
 }
 
-$('#form-competicion').addEventListener('submit', async (e) => {
+$('#form-competicion').addEventListener('submit', (e) => {
   e.preventDefault();
   const nota = $('#nota-competicion');
-  const codigo = $('#comp-codigo').value.trim().toUpperCase();
+  if (!estado.acceso) { ir('acceso'); return; }
   const nombre = $('#comp-nombre').value.replace(/\s+/g, ' ').trim();
   if (nombre.length < 2) { nota.textContent = 'Escribe un nombre o alias de al menos 2 caracteres.'; return; }
-  if (!$('#comp-consentimiento').checked) { nota.textContent = 'Tienes que aceptar las condiciones para competir.'; return; }
-  const btn = $('#btn-comp-entrar');
-  btn.disabled = true;
-  nota.textContent = 'Comprobando el código…';
-  try {
-    const { r, datos } = await pedirJson(`${API}/api/grupos/${encodeURIComponent(codigo)}`);
-    if (!r.ok) { nota.textContent = datos.error || 'No se ha podido comprobar el código.'; return; }
-    escribirLocal(CLAVE_INSCRIPCION, {
-      codigo: datos.grupo.codigo,
-      nombreGrupo: datos.grupo.nombre,
-      abierto: datos.grupo.abierto,
-      nombre,
-      consentimiento: new Date().toISOString(),
-    });
-    estado.competicion.puntua = true;
-    nota.textContent = '';
-    pintarCompeticion();
-  } catch (err) {
-    nota.textContent = 'No se ha podido contactar con el servidor. Reinténtalo en un momento.';
-  } finally {
-    btn.disabled = !estado.competicion.disponible;
-  }
+  if (!$('#comp-consentimiento').checked) { nota.textContent = 'Tienes que aceptar las condiciones para registrar tus resultados.'; return; }
+  escribirLocal(CLAVE_INSCRIPCION, {
+    codigo: estado.acceso.codigo,
+    nombreGrupo: estado.acceso.nombreGrupo,
+    nombre,
+    consentimiento: new Date().toISOString(),
+  });
+  estado.competicion.puntua = true;
+  nota.textContent = '';
+  pintarCompeticion();
 });
 
-async function cargarRanking() {
-  const ins = leerInscripcion();
-  if (!ins) return;
-  try {
-    const { r, datos } = await pedirJson(`${API}/api/ranking/${encodeURIComponent(ins.codigo)}`, { cache: 'no-store' });
-    if (!r.ok) {
-      $('#rk-tabla').innerHTML = `<div class="aviso">${escapar(datos.error || 'No se ha podido cargar el ranking.')}</div>`;
-      return;
-    }
-    // Si el profesor cierra o reabre el grupo, se refleja aquí.
-    if (datos.grupo && datos.grupo.abierto !== ins.abierto) {
-      escribirLocal(CLAVE_INSCRIPCION, { ...ins, abierto: datos.grupo.abierto });
-    }
-    rankingDatos = datos.resultados || [];
-    rellenarFiltrosRanking();
-    pintarRanking();
-  } catch {
-    $('#rk-tabla').innerHTML = '<div class="aviso info">Despertando el servidor… El ranking aparecerá en unos segundos.</div>';
-  }
-}
-
-function rellenarFiltrosRanking() {
-  const rellenar = (sel, pares, todos) => {
-    const actual = sel.value;
-    sel.innerHTML = `<option value="">${todos}</option>` + pares.map(([v, t]) => `<option value="${escapar(v)}">${escapar(t)}</option>`).join('');
-    if (pares.some(([v]) => v === actual)) sel.value = actual;
-  };
-  const unicos = (f) => [...new Map(rankingDatos.map((x) => f(x))).entries()];
-  const casos = unicos((x) => [x.caso_id, x.caso_titulo]);
-  const roles = unicos((x) => [x.rol_id, x.rol_nombre]);
-  rellenar($('#rk-caso'), casos, 'Todos los casos');
-  rellenar($('#rk-rol'), roles, 'Todos los papeles');
-  // Con un solo caso y un solo papel (edición Tecnobit), los filtros sobran.
-  $('#rk-caso').classList.toggle('oculto', casos.length < 2);
-  $('#rk-rol').classList.toggle('oculto', roles.length < 2);
-}
-
-function pintarRanking() {
-  if (!rankingDatos) return;
-  const caso = $('#rk-caso').value;
-  const rol = $('#rk-rol').value;
-  const mejor = $('#rk-mejor').checked;
-  const mios = new Map(leerMisResultados().map((m) => [m.id, m]));
-
-  let filas = rankingDatos.filter((x) => (!caso || x.caso_id === caso) && (!rol || x.rol_id === rol));
-  if (mejor) {
-    // Ya vienen ordenados de más a menos puntos: nos quedamos con el primero de cada persona.
-    const vistos = new Set();
-    filas = filas.filter((x) => {
-      const k = x.nombre.toLocaleLowerCase('es');
-      if (vistos.has(k)) return false;
-      vistos.add(k);
-      return true;
-    });
-  }
-
-  if (!filas.length) {
-    $('#rk-tabla').innerHTML = '<p class="vacio">Todavía no hay resultados con estos filtros. ¡Sé el primero!</p>';
+function pintarMisResultados() {
+  const bloque = $('#mis-resultados-bloque');
+  const mios = estado.acceso ? leerMisResultados().filter((m) => m.codigo === estado.acceso.codigo) : [];
+  bloque.classList.toggle('oculto', !mios.length && !leerInscripcion());
+  $('#mis-resultados-grupo').textContent = estado.acceso ? estado.acceso.nombreGrupo : '';
+  if (!mios.length) {
+    $('#mis-resultados').innerHTML = '<p class="vacio">Todavía no has registrado ninguna negociación en este grupo.</p>';
     return;
   }
-
-  // Las columnas de papel, caso y dureza solo se muestran si hay variedad.
-  const varios = (f) => new Set(rankingDatos.map(f)).size > 1;
-  const verRol = varios((x) => x.rol_id);
-  const verCaso = varios((x) => x.caso_id);
-  const verDureza = varios((x) => x.dureza);
-
-  let posicion = 0;
-  let anterior = null;
-  const html = filas.map((x, i) => {
-    if (x.puntos !== anterior) { posicion = i + 1; anterior = x.puntos; }
-    const mio = mios.get(x.id);
-    const acciones = mio
-      ? `<div class="acciones">
-           <button class="boton secundario" type="button" data-mio="informe" data-id="${x.id}">Informe</button>
-           ${x.hoja_completitud > 0 ? `<button class="boton secundario" type="button" data-mio="hoja" data-id="${x.id}">Hoja</button>` : ''}
-           <button class="boton fantasma" type="button" data-mio="borrar" data-id="${x.id}" title="Borrar mi resultado">Borrar</button>
-         </div>`
-      : '';
-    return `<tr class="${mio ? 'mio' : ''} ${posicion <= 3 ? 'podio-' + posicion : ''}">
-        <td class="pos">${posicion}</td>
-        <td>${escapar(x.nombre)}${mio ? ' <small style="color:var(--acento)">(tú)</small>' : ''}</td>
-        ${verRol ? `<td>${escapar(x.rol_nombre)}</td>` : ''}
-        ${verCaso ? `<td>${escapar(x.caso_titulo)}</td>` : ''}
-        ${verDureza ? `<td>${escapar(NOMBRE_DUREZA[x.dureza] || String(x.dureza))}</td>` : ''}
-        <td style="white-space:nowrap">${x.hoja_rellenada ? `Sí <small style="color:var(--tenue)">${x.hoja_completitud} %</small>` : 'No'}</td>
-        <td class="num puntos">${fmtNum(x.puntos)}</td>
-        <td style="white-space:nowrap;color:var(--tenue)">${fechaCorta(x.creado)}</td>
-        <td>${acciones}</td>
-      </tr>`;
-  }).join('');
-
-  $('#rk-tabla').innerHTML = `<div class="tabla-desplazable"><table class="ranking">
-      <thead><tr><th>#</th><th>Nombre o alias</th>${verRol ? '<th>Papel</th>' : ''}${verCaso ? '<th>Caso</th>' : ''}${verDureza ? '<th>Dureza</th>' : ''}<th>Hoja</th><th class="centro">Puntos</th><th>Fecha</th><th>Tus descargas</th></tr></thead>
-      <tbody>${html}</tbody></table></div>`;
-
-  $$('#rk-tabla [data-mio]').forEach((b) => b.addEventListener('click', () => accionMiResultado(b)));
+  $('#mis-resultados').innerHTML = `<div class="tabla-desplazable"><table class="ranking">
+      <thead><tr><th>Fecha</th><th>Caso</th><th>Nombre o alias</th><th class="centro">Puntos</th><th>Descargas</th></tr></thead>
+      <tbody>${mios.map((m) => `<tr class="mio">
+        <td style="white-space:nowrap;color:var(--tenue)">${fechaCorta(m.fecha)}</td>
+        <td>${escapar(m.caso || '')}</td>
+        <td>${escapar(m.nombre || '')}</td>
+        <td class="num puntos">${fmtNum(m.puntos)}</td>
+        <td><div class="acciones">
+          <button class="boton secundario" type="button" data-mio="informe" data-id="${m.id}">Informe</button>
+          <button class="boton secundario" type="button" data-mio="hoja" data-id="${m.id}">Hoja</button>
+          <button class="boton fantasma" type="button" data-mio="borrar" data-id="${m.id}" title="Borrar mi resultado">Borrar</button>
+        </div></td></tr>`).join('')}</tbody></table></div>`;
+  $$('#mis-resultados [data-mio]').forEach((b) => b.addEventListener('click', () => accionMiResultado(b)));
 }
-
-['#rk-caso', '#rk-rol', '#rk-mejor'].forEach((s) => $(s).addEventListener('change', pintarRanking));
-$('#rk-actualizar').addEventListener('click', cargarRanking);
 
 async function accionMiResultado(boton) {
   const id = boton.dataset.id;
@@ -2052,13 +2147,13 @@ async function accionMiResultado(boton) {
   if (!mio) return;
 
   if (accion === 'borrar') {
-    if (!confirm('Se borrará este resultado del ranking, con su informe y su hoja. No se puede deshacer. ¿Continuar?')) return;
+    if (!confirm('Se borrará este resultado, con su informe y su hoja: tampoco lo verá el profesor. No se puede deshacer. ¿Continuar?')) return;
     const { r, datos } = await pedirJson(`${API}/api/resultados/${id}/borrar`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: mio.token }),
     });
     if (!r.ok) { alert(datos.error || 'No se ha podido borrar.'); return; }
     olvidarMiResultado(id);
-    cargarRanking();
+    pintarMisResultados();
     return;
   }
 
@@ -2101,7 +2196,9 @@ async function descargarDeResultado(res, que) {
 
 const CLAVE_PROFESOR = 'negociador-profesor';
 let profResultados = [];
-let profGrupoActual = null;
+let profGrupoActual = null; // código del grupo, o "empresa:<id>" para el ranking de toda una empresa
+let profEmpresas = [];
+let profGrupos = [];
 
 const claveProfesor = () => { try { return sessionStorage.getItem(CLAVE_PROFESOR) || ''; } catch { return ''; } };
 
@@ -2123,8 +2220,37 @@ function pintarProfesor() {
   const dentro = Boolean(claveProfesor());
   $('#prof-login').classList.toggle('oculto', dentro);
   $('#prof-panel').classList.toggle('oculto', !dentro);
-  if (dentro) cargarGruposProfesor();
+  if (dentro) { cargarEmpresasProfesor(); cargarGruposProfesor(); }
 }
+
+async function cargarEmpresasProfesor() {
+  let res;
+  try { res = await apiProfesor('empresas'); } catch { return; }
+  if (!res.r.ok) return;
+  profEmpresas = res.datos.empresas || [];
+  const opciones = profEmpresas.map((e) => `<option value="${escapar(e.id)}">${escapar(e.nombre)}</option>`).join('');
+  const crear = $('#prof-grupo-empresa');
+  const elegida = crear.value;
+  crear.innerHTML = '<option value="">Elige la empresa…</option>' + opciones;
+  if (profEmpresas.some((e) => e.id === elegida)) crear.value = elegida;
+  const filtro = $('#prof-filtro-empresa');
+  const filtrada = filtro.value;
+  filtro.innerHTML = '<option value="">Todas las empresas</option>' + opciones;
+  if (profEmpresas.some((e) => e.id === filtrada)) filtro.value = filtrada;
+  $('#prof-ranking-empresa').disabled = !filtro.value;
+  pintarGruposProfesor();
+}
+
+const nombreEmpresa = (id) => (profEmpresas.find((e) => e.id === id) || {}).nombre || id;
+
+$('#prof-filtro-empresa').addEventListener('change', () => {
+  $('#prof-ranking-empresa').disabled = !$('#prof-filtro-empresa').value;
+  pintarGruposProfesor();
+});
+$('#prof-ranking-empresa').addEventListener('click', () => {
+  const id = $('#prof-filtro-empresa').value;
+  if (id) verResultadosProfesor(`empresa:${id}`);
+});
 
 $('#prof-login').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -2147,10 +2273,10 @@ $('#prof-crear').addEventListener('submit', async (e) => {
   nota.textContent = 'Creando…';
   const { r, datos } = await apiProfesor('grupos', {
     method: 'POST',
-    body: JSON.stringify({ nombre: $('#prof-grupo-nombre').value, codigo: $('#prof-grupo-codigo').value }),
+    body: JSON.stringify({ nombre: $('#prof-grupo-nombre').value, codigo: $('#prof-grupo-codigo').value, empresa: $('#prof-grupo-empresa').value }),
   });
   if (!r.ok) { if (r.status !== 401) nota.textContent = datos.error || 'No se ha podido crear el grupo.'; return; }
-  nota.textContent = `Grupo creado. Código para tus alumnos: ${datos.grupo.codigo}`;
+  nota.textContent = `Grupo de ${nombreEmpresa(datos.grupo.empresa)} creado. Código para tus alumnos: ${datos.grupo.codigo}`;
   $('#prof-grupo-nombre').value = '';
   $('#prof-grupo-codigo').value = '';
   cargarGruposProfesor();
@@ -2163,10 +2289,23 @@ async function cargarGruposProfesor() {
   try { res = await apiProfesor('grupos'); } catch { caja.innerHTML = '<div class="aviso">No se ha podido contactar con el servidor.</div>'; return; }
   const { r, datos } = res;
   if (!r.ok) { caja.innerHTML = r.status === 401 ? '' : `<div class="aviso">${escapar(datos.error || 'Error')}</div>`; return; }
-  if (!datos.grupos.length) { caja.innerHTML = '<p class="vacio">Todavía no hay grupos. Crea el primero arriba.</p>'; return; }
+  profGrupos = datos.grupos;
+  pintarGruposProfesor();
+}
+
+function pintarGruposProfesor() {
+  const caja = $('#prof-grupos');
+  if (!profGrupos) return;
+  const filtro = $('#prof-filtro-empresa').value;
+  const grupos = profGrupos.filter((g) => !filtro || g.empresa === filtro);
+  if (!grupos.length) {
+    caja.innerHTML = `<p class="vacio">${profGrupos.length ? 'Esta empresa todavía no tiene grupos.' : 'Todavía no hay grupos. Crea el primero arriba.'}</p>`;
+    return;
+  }
   caja.innerHTML = `<div class="tabla-desplazable"><table class="ranking">
-    <thead><tr><th>Nombre</th><th>Código</th><th>Estado</th><th>Resultados</th><th>Creado</th><th></th></tr></thead>
-    <tbody>${datos.grupos.map((g) => `<tr>
+    <thead><tr><th>Empresa</th><th>Nombre</th><th>Código</th><th>Estado</th><th>Resultados</th><th>Creado</th><th></th></tr></thead>
+    <tbody>${grupos.map((g) => `<tr>
+      <td>${escapar(nombreEmpresa(g.empresa))}</td>
       <td>${escapar(g.nombre)}</td>
       <td><code>${escapar(g.codigo)}</code></td>
       <td>${g.abierto ? '<span style="color:var(--verde)">Abierto</span>' : '<span style="color:var(--tenue)">Cerrado</span>'}</td>
@@ -2177,7 +2316,7 @@ async function cargarGruposProfesor() {
         <button class="boton fantasma" type="button" data-g="${g.abierto ? 'cerrar' : 'abrir'}" data-codigo="${escapar(g.codigo)}">${g.abierto ? 'Cerrar' : 'Reabrir'}</button>
         <button class="boton peligro" type="button" data-g="borrar" data-codigo="${escapar(g.codigo)}">Borrar</button>
       </div></td></tr>`).join('')}</tbody></table></div>`;
-  $$('#prof-grupos [data-g]').forEach((b) => b.addEventListener('click', () => accionGrupo(b.dataset.g, b.dataset.codigo, datos.grupos.find((g) => g.codigo === b.dataset.codigo))));
+  $$('#prof-grupos [data-g]').forEach((b) => b.addEventListener('click', () => accionGrupo(b.dataset.g, b.dataset.codigo, profGrupos.find((g) => g.codigo === b.dataset.codigo))));
 }
 
 async function accionGrupo(accion, codigo, grupo) {
@@ -2193,20 +2332,25 @@ async function accionGrupo(accion, codigo, grupo) {
   cargarGruposProfesor();
 }
 
-async function verResultadosProfesor(codigo, grupo) {
-  profGrupoActual = codigo;
+async function verResultadosProfesor(clave, grupo) {
+  profGrupoActual = clave;
+  const deEmpresa = clave.startsWith('empresa:');
+  const empresa = deEmpresa ? clave.slice('empresa:'.length) : (grupo && grupo.empresa) || '';
   $('#prof-resultados-bloque').classList.remove('oculto');
-  $('#prof-resultados-grupo').textContent = `${grupo ? grupo.nombre : ''} · ${codigo}`;
+  $('#prof-resultados-grupo').textContent = deEmpresa
+    ? `Ranking de ${nombreEmpresa(empresa)} · todos sus grupos`
+    : `${nombreEmpresa(empresa)} · ${grupo ? grupo.nombre : ''} · ${clave}`;
   const caja = $('#prof-resultados');
   caja.innerHTML = '<p class="vacio">Cargando…</p>';
-  const { r, datos } = await apiProfesor(`grupos/${encodeURIComponent(codigo)}`);
+  const ruta = deEmpresa ? `empresas/${encodeURIComponent(empresa)}` : `grupos/${encodeURIComponent(clave)}`;
+  const { r, datos } = await apiProfesor(ruta);
   if (!r.ok) { caja.innerHTML = `<div class="aviso">${escapar(datos.error || 'Error')}</div>`; return; }
   profResultados = datos.resultados;
-  if (!profResultados.length) { caja.innerHTML = '<p class="vacio">Este grupo todavía no tiene resultados.</p>'; return; }
+  if (!profResultados.length) { caja.innerHTML = `<p class="vacio">${deEmpresa ? 'Esta empresa' : 'Este grupo'} todavía no tiene resultados.</p>`; return; }
   caja.innerHTML = `<div class="tabla-desplazable"><table class="ranking">
-    <thead><tr><th>#</th><th>Nombre</th><th>Papel</th><th>Caso</th><th>Dureza</th><th>Hoja</th><th>Rúbrica</th><th>Resultado</th><th>×</th><th class="centro">Puntos</th><th>Fecha</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>Nombre</th>${deEmpresa ? '<th>Grupo</th>' : ''}<th>Papel</th><th>Caso</th><th>Dureza</th><th>Hoja</th><th>Rúbrica</th><th>Resultado</th><th>×</th><th class="centro">Puntos</th><th>Fecha</th><th></th></tr></thead>
     <tbody>${profResultados.map((x, i) => `<tr>
-      <td class="pos">${i + 1}</td><td>${escapar(x.nombre)}</td><td>${escapar(x.rol_nombre)}</td><td>${escapar(x.caso_titulo)}</td>
+      <td class="pos">${i + 1}</td><td>${escapar(x.nombre)}</td>${deEmpresa ? `<td>${escapar(x.grupo_nombre || x.grupo)}</td>` : ''}<td>${escapar(x.rol_nombre)}</td><td>${escapar(x.caso_titulo)}</td>
       <td>${x.dureza}</td><td style="white-space:nowrap">${x.hoja_rellenada ? 'Sí' : 'No'} <small style="color:var(--tenue)">${x.hoja_completitud} %</small></td>
       <td class="num">${fmtNum(x.rubrica)}</td><td class="num">${fmtNum(x.resultado)}</td><td class="num">${fmtNum(x.factor)}</td>
       <td class="num puntos">${fmtNum(x.puntos)}</td><td style="color:var(--tenue);white-space:nowrap">${fechaCorta(x.creado)}</td>
@@ -2223,7 +2367,7 @@ async function accionResultadoProfesor(b) {
   if (b.dataset.r === 'borrar') {
     if (!confirm('Se anulará este resultado: desaparece del ranking junto con su informe y su hoja. ¿Continuar?')) return;
     await apiProfesor(`resultados/${id}`, { method: 'DELETE' });
-    verResultadosProfesor(profGrupoActual);
+    verResultadosProfesor(profGrupoActual, profGrupos.find((g) => g.codigo === profGrupoActual));
     cargarGruposProfesor();
     return;
   }
@@ -2239,18 +2383,18 @@ async function accionResultadoProfesor(b) {
 
 $('#prof-csv').addEventListener('click', () => {
   if (!profResultados.length) return;
-  const cab = ['Posición', 'Nombre', 'Papel', 'Caso', 'Dureza', 'Hoja rellenada', 'Hoja %', 'Rúbrica', 'Resultado', 'Factor', 'Puntos', 'Fecha'];
+  const cab = ['Posición', 'Nombre', 'Grupo', 'Papel', 'Caso', 'Dureza', 'Hoja rellenada', 'Hoja %', 'Rúbrica', 'Resultado', 'Factor', 'Puntos', 'Fecha'];
   const c = (v) => `"${String(v).replace(/"/g, '""')}"`;
   const num = (n) => String(Math.round(Number(n) * 10) / 10).replace('.', ',');
   const filas = profResultados.map((x, i) => [
-    i + 1, x.nombre, x.rol_nombre, x.caso_titulo, x.dureza, x.hoja_rellenada ? 'Sí' : 'No', x.hoja_completitud,
+    i + 1, x.nombre, x.grupo_nombre || x.grupo || '', x.rol_nombre, x.caso_titulo, x.dureza, x.hoja_rellenada ? 'Sí' : 'No', x.hoja_completitud,
     num(x.rubrica), num(x.resultado), num(x.factor), num(x.puntos), new Date(x.creado).toLocaleString('es-ES'),
   ]);
   // Separador ";" y BOM para que Excel en español lo abra bien a la primera.
   const csv = '﻿' + [cab, ...filas].map((f) => f.map(c).join(';')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  a.download = `ranking-${profGrupoActual}.csv`;
+  a.download = `ranking-${String(profGrupoActual).replace(':', '-')}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 });
@@ -2275,9 +2419,10 @@ function rellenarTitular() {
 // entra con un enlace directo a una vista que no necesita caso (por ejemplo
 // negolab.es/#privacidad o #competicion), se abre esa vista.
 const vistaDelEnlace = (location.hash || '').slice(1);
-history.replaceState({ vista: 'inicio' }, '', '#inicio');
+history.replaceState({ vista: 'acceso' }, '', '#acceso');
 rellenarTitular();
-if (vistaDelEnlace !== 'inicio' && VISTAS_DIRECTAS.includes(vistaDelEnlace)) ir(vistaDelEnlace);
+// Las páginas legales y el panel del profesor se abren sin código.
+if (VISTAS_SIN_ACCESO.includes(vistaDelEnlace) && vistaDelEnlace !== 'acceso') ir(vistaDelEnlace);
 
 if (!API || API.includes('PON-AQUI')) {
   document.body.insertAdjacentHTML(
@@ -2291,6 +2436,14 @@ if (!API || API.includes('PON-AQUI')) {
   despertarServidor();
 }
 
-cargarCasos();
+// Si este navegador ya entró con un código, se vuelve a validar (por si el
+// grupo se ha borrado) y se recupera la imagen de su empresa. Si se abrió
+// directamente una página legal o el panel del profesor, se queda ahí.
+const accesoGuardado = leerAccesoGuardado();
+if (accesoGuardado && accesoGuardado.codigo && API && !API.includes('PON-AQUI')) {
+  const libre = VISTAS_SIN_ACCESO.includes(vistaDelEnlace) && vistaDelEnlace !== 'acceso';
+  const destino = libre ? vistaDelEnlace : VISTAS_DIRECTAS.includes(vistaDelEnlace) ? vistaDelEnlace : 'inicio';
+  entrarConCodigo(accesoGuardado.codigo, { vistaInicial: destino });
+}
 montarTablasPreparacion();
 

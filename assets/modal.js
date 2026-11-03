@@ -10,9 +10,10 @@
    Se cierran con la ×, con el botón «Entendido», con Esc o pulsando fuera. */
 
 (function () {
-  // Rúbrica del caso Tecnobit «Operación Punto Crítico» (la misma que usa el
-  // evaluador en negociador-api/src/casos.js): competencia, peso y qué se observa.
-  const COMPETENCIAS = [
+  // Rúbrica por defecto (la del caso Tecnobit «Operación Punto Crítico»).
+  // Al entrar con un código de grupo, app.js publica en window.NEGOLAB_RUBRICA
+  // la rúbrica del caso de esa empresa, y es la que se muestra.
+  const COMPETENCIAS_DEFECTO = [
     ['Preparación y estrategia', 10, 'Llega con objetivos, límites y alternativas claros; sabe qué necesita, qué puede ceder y qué pedirá a cambio.'],
     ['Exploración de intereses', 20, 'Investiga las necesidades reales del cliente, qué hay detrás de cada exigencia y cómo decide, en lugar de quedarse en las posiciones.'],
     ['Escucha y adaptación', 10, 'Recoge lo que dice el cliente, verifica, resume y ajusta su propuesta a la información nueva.'],
@@ -22,13 +23,26 @@
     ['Creación de alternativas', 15, 'Genera opciones que satisfacen intereses de ambas partes.'],
     ['Cierre y compromisos', 10, 'Cierra un acuerdo concreto y ejecutable: qué, cuándo, precio, aportación de cada parte, autorizaciones pendientes y formalización.'],
   ];
-  const NIVELES = [
+  const NIVELES_DEFECTO = [
     ['1 · Reactivo', 'Responde a las exigencias sin explorar ni preparar alternativas.'],
     ['2 · Básico', 'Identifica algunas necesidades, pero negocia principalmente desde posiciones.'],
     ['3 · Competente', 'Explora intereses, argumenta valor y plantea intercambios razonables.'],
     ['4 · Avanzado', 'Identifica prioridades ocultas, construye alternativas y gestiona eficazmente las concesiones.'],
     ['5 · Experto', 'Integra intereses, riesgos, valor económico y relación comercial en un acuerdo sólido y ejecutable.'],
   ];
+
+  const competencias = () => {
+    const r = window.NEGOLAB_RUBRICA;
+    return r && r.competencias && r.competencias.length
+      ? r.competencias.map((c) => [c.nombre, c.peso, c.descriptor || ''])
+      : COMPETENCIAS_DEFECTO;
+  };
+  const niveles = () => {
+    const r = window.NEGOLAB_RUBRICA;
+    return r && r.niveles && r.niveles.length
+      ? r.niveles.map((n) => { const [a, ...b] = n.split(':'); return [a.replace(/^Nivel\s*/, ''), b.join(':').trim()]; })
+      : NIVELES_DEFECTO;
+  };
 
   const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -101,14 +115,14 @@
           (máximo 40 puntos).</p>
         <table>
           <thead><tr><th>Competencia</th><th>Peso</th><th>Qué se observa</th></tr></thead>
-          <tbody>${COMPETENCIAS.map(([c, peso, desc], i) => `<tr>
+          <tbody>${competencias().map(([c, peso, desc], i) => `<tr>
             <td><strong>${i + 1}. ${esc(c)}</strong></td>
             <td class="nota-alta"><strong>${peso} %</strong></td>
             <td>${esc(desc)}</td></tr>`).join('')}</tbody>
         </table>
         <p class="intro" style="margin-top:16px">Interpretación del nivel global:</p>
         <table>
-          <tbody>${NIVELES.map(([n, d]) => `<tr><td><strong>${esc(n)}</strong></td><td>${esc(d)}</td></tr>`).join('')}</tbody>
+          <tbody>${niveles().map(([n, d]) => `<tr><td><strong>${esc(n)}</strong></td><td>${esc(d)}</td></tr>`).join('')}</tbody>
         </table>
         <div class="pie">
           <button class="boton fantasma" type="button" data-ir="marco" data-cerrar-modal>Ver el marco completo</button>

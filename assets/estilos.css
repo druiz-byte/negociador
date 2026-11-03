@@ -1,16 +1,18 @@
 :root {
-  /* Paleta corporativa de Tecnobit (Grupo Oesía): azul marino del logotipo
-     (#31567a) y azul claro del símbolo (#5ea4c5), sobre fondo claro. */
-  --fondo: #f3f6f9;
+  /* Paleta neutra de NegoLab (portada y acceso). Al entrar con un código de
+     grupo, app.js la sustituye por la de la empresa (ver empresas.js en el
+     servidor): --acento, --acento-2, --azul, --fondo, --superficie, --borde,
+     --texto y --tenue. El resto de tonos se derivan de ellas. */
+  --fondo: #f4f5f7;
   --fondo-2: #ffffff;
-  --superficie: #eaf0f5;
-  --borde: #d3dde6;
-  --texto: #1c2b3a;
-  --tenue: #5b6d80;
-  --acento: #31567a;
-  --acento-2: #5ea4c5;
-  --acento-suave: rgba(49, 86, 122, 0.09);
-  --azul: #2f7fa6;
+  --superficie: #ebedf1;
+  --borde: #d6dae1;
+  --texto: #1d2430;
+  --tenue: #5c6676;
+  --acento: #2b3a55;
+  --acento-2: #6b8fb8;
+  --acento-suave: color-mix(in srgb, var(--acento) 9%, transparent);
+  --azul: #3d6a9e;
   --verde: #2e8b6a;
   --rojo: #b9403a;
   --radio: 10px;
@@ -59,9 +61,9 @@ header.principal .contenedor {
 .marca .producto { color: var(--acento); font-size: .98rem; white-space: nowrap; }
 .marca .producto b { color: var(--azul); font-weight: 700; }
 header.principal { border-top: 3px solid var(--acento); }
-.hero { background: linear-gradient(180deg, rgba(94,164,197,.10), rgba(94,164,197,0)); border-radius: 0 0 18px 18px; }
+.hero { background: linear-gradient(180deg, color-mix(in srgb, var(--acento-2) 10%, transparent), transparent); border-radius: 0 0 18px 18px; }
 .hero h1 { color: var(--acento); }
-.boton { box-shadow: 0 2px 6px rgba(49,86,122,.18); }
+.boton { box-shadow: 0 2px 6px color-mix(in srgb, var(--acento) 18%, transparent); }
 .boton.secundario, .boton.fantasma, .boton.peligro { box-shadow: none; }
 .ficha-fija { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .ficha-fija .item { background: var(--fondo-2); border: 1px solid var(--borde); border-left: 4px solid var(--acento-2); border-radius: 8px; padding: 12px 14px; }
@@ -142,7 +144,7 @@ nav.principal button[aria-current="true"] { color: var(--acento); background: va
   padding: 22px; display: flex; flex-direction: column; gap: 12px;
   transition: border-color .15s, transform .15s;
 }
-.tarjeta:hover { border-color: rgba(49,86,122,.45); transform: translateY(-2px); }
+.tarjeta:hover { border-color: color-mix(in srgb, var(--acento) 45%, transparent); transform: translateY(-2px); }
 .tarjeta .meta { display: flex; flex-wrap: wrap; gap: 6px; }
 .pastilla {
   font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; font-weight: 600;
@@ -151,7 +153,7 @@ nav.principal button[aria-current="true"] { color: var(--acento); background: va
 }
 .pastilla.comercial { color: var(--azul); border-color: rgba(94,164,197,.35); }
 .pastilla.compras { color: var(--verde); border-color: rgba(46,139,106,.35); }
-.pastilla.proyectos { color: var(--acento); border-color: rgba(49,86,122,.35); }
+.pastilla.proyectos { color: var(--acento); border-color: color-mix(in srgb, var(--acento) 35%, transparent); }
 .tarjeta h3 { margin: 0; }
 .tarjeta .sub { color: var(--tenue); font-size: .9rem; margin: -8px 0 0; }
 .tarjeta p.resumen { margin: 0; color: var(--tenue); font-size: .93rem; flex: 1; }
@@ -206,7 +208,7 @@ input[type="text"], textarea, select {
   width: 100%; background: var(--fondo); border: 1px solid var(--borde); color: var(--texto);
   border-radius: 7px; padding: 9px 11px; font: inherit; font-size: .92rem; resize: vertical;
 }
-input:focus, textarea:focus, select:focus { outline: 2px solid rgba(49,86,122,.45); outline-offset: -1px; border-color: var(--acento); }
+input:focus, textarea:focus, select:focus { outline: 2px solid color-mix(in srgb, var(--acento) 45%, transparent); outline-offset: -1px; border-color: var(--acento); }
 
 table.editable { width: 100%; border-collapse: collapse; font-size: .88rem; }
 table.editable th { text-align: left; font-weight: 600; padding: 6px 8px; color: var(--tenue); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
@@ -288,7 +290,7 @@ table.editable input { padding: 7px 9px; font-size: .88rem; }
 }
 .turno.mio { margin-left: auto; }
 .turno.mio .quien { text-align: right; }
-.turno.mio .texto { background: var(--acento-suave); border-color: rgba(49,86,122,.35); }
+.turno.mio .texto { background: var(--acento-suave); border-color: color-mix(in srgb, var(--acento) 35%, transparent); }
 .turno.sistema { max-width: 100%; }
 .turno.sistema .texto { background: none; border: 0; border-left: 2px solid var(--azul); border-radius: 0; color: var(--tenue); font-size: .9rem; padding: 4px 0 4px 14px; }
 .turno.informe { max-width: 100%; }
@@ -434,9 +436,35 @@ table.ranking .acciones button { font-size: .76rem; padding: 4px 9px; }
 .vacio { color: var(--tenue); font-size: .9rem; padding: 10px 0; }
 .competicion-config .opcion { cursor: default; }
 .resultado-competicion {
-  border: 1px solid rgba(49,86,122,.45); background: var(--acento-suave); border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--acento) 45%, transparent); background: var(--acento-suave); border-radius: 10px;
   padding: 14px 16px; margin-top: 14px;
 }
 .resultado-competicion .cifra { font-size: 1.8rem; font-weight: 700; color: var(--acento); line-height: 1.1; }
 .opcion:disabled { opacity: .4; cursor: not-allowed; }
 .opcion:disabled:hover { border-color: var(--borde); }
+
+/* ─── Acceso por código de grupo (portada neutra) ─── */
+
+.acceso { max-width: 640px; margin: 0 auto; padding: 72px 0 40px; text-align: center; }
+.acceso h1 { color: var(--acento); }
+.acceso h1 .destacado { color: var(--azul); }
+.acceso .entrada { color: var(--tenue); font-size: 1.08rem; max-width: 52ch; margin: 0 auto 28px; }
+.acceso-form { text-align: left; max-width: 440px; margin: 0 auto; }
+.acceso-form input { font-size: 1.15rem; letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+.acceso-form .barra-accion { justify-content: center; }
+.acceso-form .nota { display: block; width: 100%; text-align: center; min-height: 1.4em; }
+.acceso .pie-acceso { margin-top: 28px; color: var(--tenue); font-size: .88rem; }
+
+body.sin-acceso nav.principal,
+body.sin-acceso .marca .separador,
+body.sin-acceso .solo-con-acceso { display: none !important; }
+
+.marca .logo-texto { font-weight: 700; color: var(--acento); font-size: 1.02rem; white-space: nowrap; letter-spacing: -.01em; }
+
+.grupo-activo { font-size: .86rem; color: var(--tenue); }
+.grupo-activo button { background: none; border: 0; color: var(--acento); text-decoration: underline; cursor: pointer; font: inherit; padding: 0; }
+
+/* En móvil, sin empresa todavía, la cabecera muestra al menos "NegoLab". */
+@media (max-width: 640px) {
+  body.sin-acceso .marca .producto { display: inline; }
+}
