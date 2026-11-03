@@ -3,21 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NegoLab · Tecnobit — Operación Punto Crítico</title>
-<meta name="description" content="Simulación de negociación para Tecnobit: el Director de Programa de un cliente estratégico del sector defensa exige más por menos. Prepárate, negocia y recibe tu feedback.">
-<meta property="og:title" content="NegoLab · Tecnobit — Operación Punto Crítico">
-<meta property="og:description" content="Negocia con el Director de Programa de un cliente estratégico de defensa. Feedback por competencias y ranking por grupo.">
-<meta name="theme-color" content="#31567a">
+<title>NegoLab · Simulador de negociación</title>
+<meta name="description" content="NegoLab: simulador de negociación para programas de formación de directivos. Prepárate, negocia con una contraparte simulada y recibe feedback por competencias.">
+<meta property="og:title" content="NegoLab · Simulador de negociación">
+<meta property="og:description" content="Negocia con una contraparte simulada por IA y recibe feedback por competencias. Acceso con el código de tu grupo.">
+<meta name="theme-color" content="#2b3a55">
 <meta property="og:type" content="website">
 <link rel="stylesheet" href="assets/estilos.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2331567a'/><path d='M9 24 L23 8' stroke='%235ea4c5' stroke-width='3.5' stroke-linecap='round'/><path d='M8 13 L24 11' stroke='%23ffffff' stroke-width='3' stroke-linecap='round'/></svg>">
 </head>
-<body>
+<body class="sin-acceso">
 
 <header class="principal">
   <div class="contenedor">
     <div class="marca" data-ir="inicio" title="Inicio">
-      <img class="logo" src="assets/tecnobit-logo.svg" alt="Tecnobit · Grupo Oesía" width="200" height="71">
+      <!-- Logo y nombre de la empresa: los pone app.js al entrar con el código de grupo. -->
+      <img class="logo oculto" id="logo-empresa" src="data:," alt="">
+      <span class="logo-texto oculto" id="logo-texto"></span>
       <span class="separador" aria-hidden="true"></span>
       <span class="producto">Nego<b>Lab</b></span>
     </div>
@@ -33,19 +35,37 @@
 
 <main>
 
-<!-- ══════════ INICIO ══════════ -->
-<section id="vista-inicio" class="vista activa">
+<!-- ══════════ ACCESO (portada neutra) ══════════
+     Sin código de grupo no se ve ningún caso. El código decide la empresa:
+     su logo, sus colores, sus textos y sus casos (ver empresas.js en el servidor). -->
+<section id="vista-acceso" class="vista activa">
+  <div class="contenedor">
+    <div class="acceso">
+      <span class="etiqueta">NegoLab · Simulador de negociación</span>
+      <h1>Entrena tu negociación<br><span class="destacado">con un interlocutor que no te lo pone fácil</span>.</h1>
+      <p class="entrada">Introduce el código de grupo que te ha dado tu profesor para entrar en tu programa.</p>
+      <form class="bloque acceso-form" id="form-acceso" autocomplete="off">
+        <div class="campo">
+          <label for="acceso-codigo">Código de grupo<span class="pista">Por ejemplo NEG-4K7PQX</span></label>
+          <input type="text" id="acceso-codigo" maxlength="24" required autocapitalize="characters" spellcheck="false">
+        </div>
+        <div class="barra-accion">
+          <button class="boton" type="submit" id="btn-acceso">Entrar</button>
+          <span class="nota" id="nota-acceso"></span>
+        </div>
+      </form>
+      <p class="pie-acceso">¿No tienes código? Pídeselo a la persona que organiza tu formación.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ INICIO (de la empresa) ══════════ -->
+<section id="vista-inicio" class="vista">
   <div class="contenedor">
     <div class="hero">
-      <span class="etiqueta">Tecnobit · Programa de negociación</span>
-      <h1>Operación Punto Crítico:<br><span class="destacado">el cliente estratégico que exige más por menos</span>.</h1>
-      <p class="entrada">
-        DEFENSYS quiere adelantar cuatro semanas la entrega del subsistema de comunicaciones tácticas,
-        añadir dos funcionalidades sin coste y blindarse con nuevas penalizaciones. Como Responsable de
-        Programa de Tecnobit, tendrás que proteger la relación sin comprometer la rentabilidad ni asumir
-        riesgos técnicos inaceptables. Al otro lado de la mesa, su Director de Programa: exigente,
-        analítico y con poco tiempo.
-      </p>
+      <span class="etiqueta" data-texto="etiqueta"></span>
+      <h1 data-texto="heroTitulo"></h1>
+      <p class="entrada" data-texto="heroTexto"></p>
       <div class="barra-accion">
         <button class="boton" data-ir="casos">Ver el caso</button>
         <button class="boton secundario" data-ir="marco">Cómo se te evalúa</button>
@@ -56,7 +76,7 @@
       <div class="paso">
         <div class="num">1</div>
         <h3>Lee tu briefing</h3>
-        <p>Juegas como Responsable de Programa de Tecnobit. Solo ves tu información; el cliente tiene la suya.</p>
+        <p data-texto="paso1"></p>
       </div>
       <div class="paso">
         <div class="num">2</div>
@@ -66,12 +86,12 @@
       <div class="paso">
         <div class="num">3</div>
         <h3>Negocia (20–25 min)</h3>
-        <p>Con el Director de Programa de DEFENSYS, en vídeo y por texto o voz. Nivel avanzado, igual para todos.</p>
+        <p data-texto="paso3"></p>
       </div>
       <div class="paso">
         <div class="num">4</div>
         <h3>Recibe tu feedback</h3>
-        <p>Ocho competencias con citas de lo que dijiste, tu momento crítico y una recomendación práctica. Y, si compites, tu puesto en el ranking.</p>
+        <p>Ocho competencias con citas de lo que dijiste, tu momento crítico y una recomendación práctica. Y, si te registras, tu resultado queda guardado para tu profesor.</p>
       </div>
     </div>
 
@@ -406,31 +426,16 @@
 
     <div class="bloque" id="marco-evaluacion">
       <h3>Cómo se te evalúa</h3>
-      <p class="ayuda">Ocho competencias, de 1 a 5, con su peso. Cada nota va acompañada de una cita literal de lo que dijiste.
+      <p class="ayuda">Las competencias de la rúbrica de tu caso, de 1 a 5, con su peso. Cada nota va acompañada de una cita literal de lo que dijiste.
         La media ponderada da tu nivel global y, multiplicada por 8, los puntos de rúbrica (máximo 40).</p>
       <div class="prosa">
         <table class="rubrica-pesos">
           <thead><tr><th>Competencia</th><th>Qué se observa</th><th>Peso</th></tr></thead>
-          <tbody>
-            <tr><td><strong>Preparación y estrategia</strong></td><td>Llegas con objetivos, límites y alternativas claros: qué necesitas, qué puedes ceder y qué pedirás a cambio.</td><td class="peso">10 %</td></tr>
-            <tr><td><strong>Exploración de intereses</strong></td><td>Investigas qué hay detrás de cada exigencia del cliente y cómo decide, en lugar de quedarte en las posiciones.</td><td class="peso">20 %</td></tr>
-            <tr><td><strong>Escucha y adaptación</strong></td><td>Recoges lo que dice, verificas, resumes y ajustas tu propuesta a la información nueva.</td><td class="peso">10 %</td></tr>
-            <tr><td><strong>Argumentación de valor</strong></td><td>Explicas el valor y los riesgos de cada opción con argumentos verificables.</td><td class="peso">10 %</td></tr>
-            <tr><td><strong>Gestión de presión</strong></td><td>Mantienes la calma y una relación constructiva ante la urgencia y las amenazas, sin ceder por ello.</td><td class="peso">10 %</td></tr>
-            <tr><td><strong>Gestión de concesiones</strong></td><td>Concedes de forma condicionada, dentro de lo que tienes autorizado y a cambio de contrapartidas verificables.</td><td class="peso">15 %</td></tr>
-            <tr><td><strong>Creación de alternativas</strong></td><td>Generas opciones que satisfacen los intereses de ambas partes.</td><td class="peso">15 %</td></tr>
-            <tr><td><strong>Cierre y compromisos</strong></td><td>Cierras un acuerdo concreto y ejecutable: qué, cuándo, precio, qué aporta cada parte, autorizaciones pendientes y cómo se formaliza.</td><td class="peso">10 %</td></tr>
-          </tbody>
+          <tbody id="marco-rubrica"></tbody>
         </table>
         <table>
           <thead><tr><th>Nivel</th><th>Interpretación</th></tr></thead>
-          <tbody>
-            <tr><td><strong>1 · Reactivo</strong></td><td>Responde a las exigencias sin explorar ni preparar alternativas.</td></tr>
-            <tr><td><strong>2 · Básico</strong></td><td>Identifica algunas necesidades, pero negocia principalmente desde posiciones.</td></tr>
-            <tr><td><strong>3 · Competente</strong></td><td>Explora intereses, argumenta valor y plantea intercambios razonables.</td></tr>
-            <tr><td><strong>4 · Avanzado</strong></td><td>Identifica prioridades ocultas, construye alternativas y gestiona eficazmente las concesiones.</td></tr>
-            <tr><td><strong>5 · Experto</strong></td><td>Integra intereses, riesgos, valor económico y relación comercial en un acuerdo sólido y ejecutable.</td></tr>
-          </tbody>
+          <tbody id="marco-niveles"></tbody>
         </table>
         <p>Al terminar recibes además: el resultado de la negociación (qué se ha conseguido, qué queda pendiente y si los
           compromisos son viables), tres competencias demostradas, tres oportunidades de mejora, el momento crítico de la
@@ -443,39 +448,34 @@
 <!-- ══════════ COMPETICIÓN ══════════ -->
 <section id="vista-competicion" class="vista">
   <div class="contenedor">
-    <h2>Simulación</h2>
+    <h2>Resultados</h2>
     <p class="ayuda" style="color:var(--tenue);max-width:64ch">
-      Tu profesor te da un código de grupo. Apúntate con tu nombre o si prefieres con un alias, negocia, y tu
-      puntuación entra en el ranking de tu grupo. Solo ven el ranking quienes tienen el código.
+      Regístrate con tu nombre o, si lo prefieres, con un alias. Cada negociación que termines se evalúa y queda
+      guardada para tu profesor. Tú ves tus puntos y tu informe; el ranking solo lo ve el profesor.
     </p>
 
     <div class="aviso info oculto" id="comp-no-disponible">
-      La simulación no está disponible en este momento. El simulador funciona con normalidad;
-      solo el ranking está desactivado.
+      El registro de resultados no está disponible en este momento. Puedes negociar igualmente y recibirás tu feedback.
     </div>
 
     <div class="dos-columnas" id="comp-cuerpo">
       <div class="bloque">
-        <h3 id="comp-titulo-inscripcion">Apúntate</h3>
+        <h3 id="comp-titulo-inscripcion">Regístrate</h3>
         <div id="comp-estado"></div>
         <form id="form-competicion" autocomplete="off">
           <div class="campo">
-            <label for="comp-codigo">Código del grupo<span class="pista">Te lo da tu profesor, por ejemplo NEG-4K7PQX</span></label>
-            <input type="text" id="comp-codigo" maxlength="24" required style="text-transform:uppercase">
-          </div>
-          <div class="campo">
-            <label for="comp-nombre">Tu nombre o un alias<span class="pista">Es lo que verá tu grupo en el ranking. Puedes usar un alias si prefieres no aparecer con tu nombre. Entre 2 y 40 caracteres.</span></label>
+            <label for="comp-nombre">Tu nombre o un alias<span class="pista">Es lo que verá tu profesor junto a tus resultados. Entre 2 y 40 caracteres.</span></label>
             <input type="text" id="comp-nombre" maxlength="40" required>
           </div>
           <label class="casilla">
             <input type="checkbox" id="comp-consentimiento" required>
             <span>He leído <a href="#" data-desplazar="reglas-competicion">cómo se puntúa</a> y la
             <a href="#privacidad" data-ir="privacidad">política de privacidad</a>, y acepto que mi nombre o alias,
-            si rellené la hoja de preparación y mis puntos se muestren en el ranking de este grupo.
-            Mi informe y mi hoja solo podremos descargarlos yo y el profesor.</span>
+            mis puntos, mi informe y mi hoja de preparación queden registrados para que los vea el profesor.
+            Los demás participantes no ven mis resultados.</span>
           </label>
           <div class="barra-accion" style="margin-top:16px">
-            <button class="boton" type="submit" id="btn-comp-entrar">Entrar en la simulación</button>
+            <button class="boton" type="submit" id="btn-comp-entrar">Registrarme</button>
             <span class="nota" id="nota-competicion"></span>
           </div>
         </form>
@@ -483,19 +483,20 @@
 
       <div class="bloque" id="reglas-competicion">
         <h3>Cómo se puntúa</h3>
-        <p class="formula">Puntos = (Rúbrica + Resultado) × 1,25</p>
+        <p class="formula">Puntos = (Rúbrica + Resultado) × <span id="reglas-factor-formula">1,25</span></p>
         <div class="prosa">
           <table>
-            <tr><td><strong>Rúbrica</strong><br><small>máx. 40</small></td><td>Las ocho competencias de la <a href="#" data-abrir-rubrica>rúbrica</a>, de 1 a 5, con su peso. La media ponderada se multiplica por 8. Cada nota va con una cita literal de lo que dijiste.</td></tr>
-            <tr><td><strong>Resultado</strong><br><small>máx. 20</small></td><td>Qué parte del valor disponible capturaste en el acuerdo (plazo, alcance, precio, penalizaciones y colaboración del cliente), ponderado según las prioridades de tu briefing. Comprometer lo que no tienes autorizado cuenta 0 en esa variable. Se multiplica por 20. <strong>Sin acuerdo completo, 0.</strong></td></tr>
-            <tr><td><strong>Factor de nivel</strong></td><td>Nivel avanzado (3/4), igual para todos: ×1,25</td></tr>
+            <tr><td><strong>Rúbrica</strong><br><small>máx. 40</small></td><td>Las competencias de la <a href="#" data-abrir-rubrica>rúbrica</a>, de 1 a 5, con su peso. La media ponderada se multiplica por 8. Cada nota va con una cita literal de lo que dijiste.</td></tr>
+            <tr><td><strong>Resultado</strong><br><small>máx. 20</small></td><td>Qué parte del valor disponible capturaste en el acuerdo, variable a variable, ponderado según las prioridades de tu briefing. Comprometer lo que no tienes autorizado cuenta 0 en esa variable. Se multiplica por 20. <strong>Sin acuerdo completo, 0.</strong></td></tr>
+            <tr><td><strong>Factor de nivel</strong></td><td id="reglas-factor">Nivel avanzado (3/4), igual para todos: ×1,25</td></tr>
           </table>
-          <p>Máximo posible: (40 + 20) × 1,25 = <strong>75 puntos</strong>.</p>
+          <p id="reglas-maximo">Máximo posible: (40 + 20) × 1,25 = <strong>75 puntos</strong>.</p>
           <ul>
             <li><strong>Quién evalúa.</strong> Al pulsar «Fin de la simulación», un evaluador independiente (una IA distinta de la contraparte, con la rúbrica y las fichas de ambas partes) lee la conversación completa y pone las notas. La contraparte no puntúa, y nada de lo que le digas durante la negociación cambia las reglas del evaluador.</li>
-            <li><strong>Hoja de preparación.</strong> No suma puntos por sí misma: el evaluador la usa como evidencia en «Preparación y estrategia». En el ranking aparece «Sí» si tiene rellenos al menos la mitad de sus campos.</li>
+            <li><strong>Hoja de preparación.</strong> No suma puntos por sí misma: el evaluador la usa como evidencia en «Preparación y estrategia». Cuenta como rellenada si tiene al menos la mitad de sus campos.</li>
             <li><strong>Condiciones iguales para todos.</strong> Mismo caso, mismo papel, mismo interlocutor y mismo nivel, sin coach ni tiempo muerto. Hacen falta al menos tres intervenciones tuyas.</li>
-            <li><strong>Cada negociación puntúa una vez.</strong> Puedes repetir todas las veces que quieras; el ranking puede mostrar todos los intentos o solo el mejor de cada persona.</li>
+            <li><strong>Cada negociación puntúa una vez.</strong> Puedes repetir todas las veces que quieras; el profesor ve todos tus intentos.</li>
+            <li><strong>El ranking es privado.</strong> Solo lo ve el profesor. Tú ves tus propios puntos e informes.</li>
             <li><strong>La conversación va firmada.</strong> El servidor comprueba que la negociación evaluada es exactamente la que tuvo lugar.</li>
             <li><strong>Es una evaluación automática.</strong> Puede equivocarse. El profesor puede revisar cualquier informe y anular resultados.</li>
           </ul>
@@ -503,17 +504,11 @@
       </div>
     </div>
 
-    <div class="bloque oculto" id="comp-ranking-bloque">
-      <h3>Ranking <small id="rk-grupo"></small></h3>
-      <div class="controles-ranking">
-        <select id="rk-caso" class="oculto" aria-label="Filtrar por caso"><option value="">Todos los casos</option></select>
-        <select id="rk-rol" class="oculto" aria-label="Filtrar por papel"><option value="">Todos los papeles</option></select>
-        <label class="casilla en-linea"><input type="checkbox" id="rk-mejor" checked> <span>Solo el mejor intento de cada persona</span></label>
-        <button class="boton fantasma" id="rk-actualizar" type="button">Actualizar</button>
-      </div>
-      <div id="rk-tabla"></div>
-      <p class="ayuda" style="margin-top:12px">Las descargas solo aparecen en tus propios resultados, y solo en el navegador desde el que negociaste.
-        Si quieres conservarlos, descárgalos al terminar.</p>
+    <div class="bloque oculto" id="mis-resultados-bloque">
+      <h3>Mis resultados <small id="mis-resultados-grupo"></small></h3>
+      <div id="mis-resultados"></div>
+      <p class="ayuda" style="margin-top:12px">Solo aparecen los resultados registrados desde este navegador. Si quieres conservarlos,
+        descarga el informe al terminar.</p>
     </div>
   </div>
 </section>
@@ -539,9 +534,13 @@
     <div id="prof-panel" class="oculto">
       <form class="bloque" id="prof-crear" autocomplete="off">
         <h3>Crear un grupo</h3>
+        <div class="campo">
+          <label for="prof-grupo-empresa">Empresa<span class="pista">Decide el logo, los colores y el caso que verán sus participantes</span></label>
+          <select id="prof-grupo-empresa" required><option value="">Elige la empresa…</option></select>
+        </div>
         <div class="dos-columnas">
           <div class="campo">
-            <label for="prof-grupo-nombre">Nombre<span class="pista">Por ejemplo «EMBA 2026 · grupo A»</span></label>
+            <label for="prof-grupo-nombre">Nombre<span class="pista">Por ejemplo «Haizea · compras · noviembre»</span></label>
             <input type="text" id="prof-grupo-nombre" maxlength="40" required>
           </div>
           <div class="campo">
@@ -557,6 +556,10 @@
 
       <div class="bloque">
         <h3>Grupos</h3>
+        <div class="controles-ranking">
+          <select id="prof-filtro-empresa" aria-label="Filtrar por empresa"><option value="">Todas las empresas</option></select>
+          <button class="boton secundario" type="button" id="prof-ranking-empresa" disabled>Ranking de la empresa</button>
+        </div>
         <div id="prof-grupos"></div>
       </div>
 
@@ -582,8 +585,9 @@
       <strong data-titular="nombre">[NOMBRE Y APELLIDOS]</strong>. Contacto:
       <a data-titular="email" href="#">[EMAIL DE CONTACTO]</a>.</p>
     <h3>Objeto</h3>
-    <p>NegoLab es un simulador docente para entrenar habilidades de negociación. Esta edición está adaptada
-      al programa formativo de Tecnobit. No requiere registro.</p>
+    <p>NegoLab es un simulador docente para entrenar habilidades de negociación. Cada edición está adaptada
+      al programa formativo de una empresa y solo se accede con el código de grupo que facilita el profesor.
+      No requiere registro.</p>
     <h3>Contenido generado por inteligencia artificial</h3>
     <p>La contraparte de la negociación y el evaluador de la competición son modelos de inteligencia
       artificial. Sus respuestas, notas e informes se generan automáticamente, pueden contener errores y
@@ -593,12 +597,12 @@
       contractual real. Cualquier parecido con la realidad es casual.</p>
     <h3>Propiedad intelectual</h3>
     <p>Los textos, casos, rúbrica y diseño del sitio pertenecen a su titular, salvo las librerías de terceros
-      que se usan con sus propias licencias. La marca y el logotipo de Tecnobit pertenecen a su titular. Puedes usarlos para tu formación; para reproducirlos o
+      que se usan con sus propias licencias. Las marcas y logotipos de las empresas participantes pertenecen a sus titulares. Puedes usarlos para tu formación; para reproducirlos o
       distribuirlos con otros fines, pide permiso.</p>
     <h3>Uso adecuado</h3>
     <p>No está permitido usar el simulador para fines distintos del entrenamiento, intentar acceder a las
       fichas confidenciales, manipular la evaluación ni usar nombres o alias ofensivos. El titular puede
-      retirar del ranking cualquier resultado que incumpla estas normas.</p>
+      anular cualquier resultado que incumpla estas normas.</p>
     <h3>Legislación aplicable</h3>
     <p>Este sitio se rige por la legislación española.</p>
   </div>
@@ -621,7 +625,7 @@
         <tr><td>Al negociar</td><td>Lo que escribes en la sala</td><td>Generar las respuestas de la contraparte y tu feedback. No se guarda en nuestro servidor salvo que compitas.</td><td>Prestarte el servicio que pides</td></tr>
         <tr><td>Avatar de vídeo</td><td>El texto de la contraparte (no tu voz ni tu imagen)</td><td>Ponerle cara y voz</td><td>Prestarte el servicio que pides</td></tr>
         <tr><td>Hoja de preparación</td><td>Lo que escribes en ella</td><td>Se guarda solo en tu navegador. Al terminar, se envía con tu negociación al evaluador; solo se conserva si compites</td><td>Prestarte el servicio que pides; tu consentimiento (al competir)</td></tr>
-        <tr><td>Competición</td><td>Nombre o alias, código de grupo, caso, papel, dureza, puntos, informe de evaluación (con citas literales de tus intervenciones) y hoja de preparación</td><td>Evaluarte y mostrar el ranking de tu grupo</td><td>Tu consentimiento</td></tr>
+        <tr><td>Competición</td><td>Nombre o alias, código de grupo, caso, papel, dureza, puntos, informe de evaluación (con citas literales de tus intervenciones) y hoja de preparación</td><td>Evaluarte y que tu profesor vea tus resultados</td><td>Tu consentimiento</td></tr>
         <tr><td>Analítica</td><td>Datos de navegación de Google Analytics</td><td>Saber cuánto se usa la web</td><td>Tu consentimiento (solo si aceptas)</td></tr>
       </tbody>
     </table>
@@ -630,8 +634,9 @@
 
     <h3>Quién ve tus datos de la competición</h3>
     <ul>
-      <li><strong>Tu grupo</strong> (quien tenga el código): tu nombre o alias, papel, caso, dureza, si rellenaste la hoja y tus puntos.</li>
-      <li><strong>Solo tú</strong> (desde el navegador en el que negociaste) <strong>y el profesor</strong>: tu informe y tu hoja de preparación.</li>
+      <li><strong>El profesor</strong>: tu nombre o alias, grupo, caso, papel, puntos, informe y hoja de preparación, y la clasificación de tu grupo y de tu empresa.</li>
+      <li><strong>Tú</strong> (desde el navegador en el que negociaste): tus puntos, tu informe y tu hoja.</li>
+      <li><strong>Los demás participantes</strong> no ven tus resultados: no hay ranking público.</li>
     </ul>
     <p>No se guarda tu correo, tu dirección IP ni ninguna cuenta. Usa un alias si prefieres no aparecer con tu nombre.</p>
 
@@ -658,14 +663,14 @@
     <p>Puedes acceder a tus datos, rectificarlos, suprimirlos, oponerte a su tratamiento, limitarlo, pedir su
       portabilidad y retirar tu consentimiento en cualquier momento, escribiendo a
       <a data-titular="email" href="#">[EMAIL DE CONTACTO]</a>. Además, puedes <strong>borrar tú mismo tu
-      resultado</strong> desde el ranking, y tu hoja de preparación desde la propia hoja. Si crees que no se
+      resultado</strong> desde «Mis resultados», y tu hoja de preparación desde la propia hoja. Si crees que no se
       han respetado tus derechos, puedes reclamar ante la Agencia Española de Protección de Datos
       (<a href="https://www.aepd.es" target="_blank" rel="noopener">aepd.es</a>).</p>
 
     <h3>Inteligencia artificial</h3>
     <p>Durante toda la simulación hablas con un sistema de inteligencia artificial, no con una persona. La
       puntuación de la competición también la calcula un sistema de IA, con las reglas publicadas en la
-      sección «Competición», y el profesor puede revisarla.</p>
+      sección «Resultados», y el profesor puede revisarla.</p>
 
     <h3>Destinatarios del servicio</h3>
     <p>El simulador está pensado para profesionales y estudiantes adultos.</p>
@@ -683,6 +688,7 @@
       <tbody>
         <tr><td>negociador-cookies-v1</td><td>Técnica (almacenamiento local)</td><td>Recordar tu elección sobre cookies</td><td>12 meses</td></tr>
         <tr><td>negociador-preparacion-v1</td><td>Técnica (almacenamiento local)</td><td>Guardar tu hoja de preparación</td><td>Hasta que la borres</td></tr>
+        <tr><td>negociador-acceso-v1</td><td>Técnica (almacenamiento local)</td><td>Recordar tu código de grupo para no pedírtelo cada vez</td><td>Hasta que cambies de grupo o borres los datos del navegador</td></tr>
         <tr><td>negociador-competicion-v1, negociador-mis-resultados-v1</td><td>Técnica (almacenamiento local)</td><td>Recordar tu grupo y poder descargar tus propios informes</td><td>Hasta que salgas del grupo o borres los datos del navegador</td></tr>
         <tr><td>_ga, _ga_*</td><td>Analítica (Google Analytics)</td><td>Contar visitas y saber qué secciones se usan</td><td>Hasta 2 años. <strong>Solo con tu consentimiento</strong></td></tr>
       </tbody>
@@ -699,7 +705,8 @@
 <footer class="principal">
   <div class="contenedor">
     <div>
-      <div>NegoLab · Tecnobit — simulador de negociación</div>
+      <div>NegoLab<span data-empresa-pie></span> — simulador de negociación</div>
+      <div class="grupo-activo solo-con-acceso" id="grupo-activo"></div>
       <div>Los programas, cifras y personajes del caso son ficticios. La contraparte es una inteligencia artificial.</div>
     </div>
     <nav class="pie-enlaces" aria-label="Información legal">
