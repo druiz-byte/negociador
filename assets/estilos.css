@@ -468,3 +468,19 @@ body.sin-acceso .solo-con-acceso { display: none !important; }
 @media (max-width: 640px) {
   body.sin-acceso .marca .producto { display: inline; }
 }
+
+/* ─── Botón «Log Out» de la cabecera ─── */
+.boton-salir {
+  flex: none; background: none; font: inherit; font-size: .92rem; font-weight: 600; cursor: pointer;
+  padding: 6px 12px; border-radius: 7px; border: 1px solid var(--borde); color: var(--acento);
+}
+.boton-salir:hover { border-color: var(--acento); background: var(--acento-suave); }
+header.principal nav.principal { margin-left: auto; }
+.marca img.logo { height: 36px; }
+@media (max-width: 760px) {
+  header.principal nav.principal { order: 3; margin-left: 0; }
+  header.principal .boton-salir { margin-left: auto; }
+}
+@media (max-width: 640px) {
+  .marca img.logo { height: 28px; }
+}

@@ -222,6 +222,10 @@ function despertarServidor() {
 
 const CLAVE_ACCESO = 'negociador-acceso-v1';
 
+// Aviso mientras el servidor gratuito de Render arranca en frío (hasta un minuto).
+const MENSAJE_ESPERA =
+  'El negociador se está preparando. Se está leyendo y preparando la negociación; le cuesta un poco, pero solo al principio: después es implacable y no necesita tiempo extra.';
+
 function leerAccesoGuardado() {
   try { return JSON.parse(localStorage.getItem(CLAVE_ACCESO)) || null; } catch { return null; }
 }
@@ -230,9 +234,9 @@ async function entrarConCodigo(codigo, { intento = 1, desdeFormulario = false, v
   const nota = $('#nota-acceso');
   const btn = $('#btn-acceso');
   btn.disabled = true;
-  nota.textContent = intento === 1 ? 'Comprobando el código…' : `Despertando el servidor… (intento ${intento} de 3)`;
+  nota.textContent = intento === 1 ? 'Comprobando el código…' : `${MENSAJE_ESPERA} (intento ${intento} de 3)`;
   const aviso = setTimeout(() => {
-    nota.textContent = 'Despertando el servidor… El simulador se apaga cuando nadie lo usa y tarda cerca de un minuto en volver.';
+    nota.textContent = MENSAJE_ESPERA;
   }, 4000);
   try {
     const r = await fetch(`${API}/api/grupos/${encodeURIComponent(codigo)}`, { cache: 'no-store' });
@@ -310,6 +314,12 @@ function aplicarEmpresa(empresa) {
   const img = $('#logo-empresa');
   const texto = $('#logo-texto');
   if (empresa.marca && empresa.marca.logo) {
+    // Si el fichero del logo no carga, se muestra el nombre en texto.
+    img.onerror = () => {
+      img.classList.add('oculto');
+      texto.textContent = empresa.nombre;
+      texto.classList.remove('oculto');
+    };
     img.src = empresa.marca.logo;
     img.alt = empresa.marca.logoAlt || empresa.nombre;
     img.classList.remove('oculto');
@@ -834,7 +844,7 @@ async function hablarConSimulacion() {
     if (!acumulado) {
       caja.innerHTML =
         '<span class="escribiendo"><i></i><i></i><i></i></span>' +
-        '<div style="color:var(--tenue);font-size:.85rem;margin-top:8px">Despertando el servidor, un momento…</div>';
+        `<div style="color:var(--tenue);font-size:.85rem;margin-top:8px">${MENSAJE_ESPERA}</div>`;
     }
   }, 7000);
   try {
