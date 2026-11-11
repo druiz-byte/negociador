@@ -234,8 +234,60 @@ function esModoExperto() {
   return estado.casos.length > 0 && estado.casos.every((c) => c.experto);
 }
 
+/* ─────────── Idioma ───────────
+   La web está en castellano. Una empresa puede pedir otro idioma con
+   "idioma" en empresas.js (Built to Innovate: 'en'). Entonces se traducen
+   los textos visibles del modo experto (tabla TEXTOS_EN) y los mensajes
+   que genera app.js (función tx). Las páginas legales y el panel del
+   profesor siguen en castellano. */
+function idiomaWeb() {
+  return (estado.acceso && estado.acceso.empresa && estado.acceso.empresa.idioma) || 'es';
+}
+const tx = (es, en) => (idiomaWeb() === 'en' ? en : es);
+
+// Selector → HTML en inglés. Solo elementos visibles en el modo experto.
+const TEXTOS_EN = [
+  ['nav.principal [data-ir="inicio"]', 'Home'],
+  ['nav.principal [data-ir="casos"] .solo-experto', 'The expert'],
+  ['#vista-inicio .barra-accion.solo-experto [data-empezar-experto]', 'Start the conversation'],
+  ['#vista-inicio .barra-accion.solo-experto [data-ir="casos"]', 'What you can ask'],
+  ['#vista-inicio .pasos.solo-experto .paso:nth-child(1) h3', 'Ask'],
+  ['#vista-inicio .pasos.solo-experto .paso:nth-child(2) h3', 'Dig deeper'],
+  ['#vista-inicio .pasos.solo-experto .paso:nth-child(2) p', 'Ask for examples, follow up and tell it about your own situation: your company, your team, your industry.'],
+  ['#vista-inicio .pasos.solo-experto .paso:nth-child(3) h3', 'Listen'],
+  ['#vista-inicio .bloque.solo-experto h3', 'About this expert'],
+  ['#vista-inicio .bloque.solo-experto p', 'An AI avatar that answers using the framework of <em>Built to Innovate</em> (Ben M. Bensaou, McGraw Hill). No case, no grade, no ranking: just a space for your questions. Like any AI, it can make mistakes, so check anything important against the book.'],
+  ['#vista-casos h2 .solo-experto', 'The expert'],
+  ['#vista-casos p.solo-experto', 'An open conversation: ask anything about building innovation into your organization.'],
+  ['#vista-sala .dato:nth-of-type(1) span:first-child', 'Session'],
+  ['#vista-sala .dato:nth-of-type(2) span:first-child', 'You'],
+  ['#btn-salir', 'Leave the room'],
+  ['#btn-enviar', 'Send'],
+  ['#avatar-estado', 'Connecting the avatar…'],
+  ['footer.principal .solo-experto:not(div.solo-experto)', 'a conversation with an expert'],
+  ['footer.principal div.solo-experto', 'The expert is an AI avatar and can make mistakes.'],
+  ['footer.principal [data-ir="aviso-legal"]', 'Legal notice'],
+  ['footer.principal [data-ir="privacidad"]', 'Privacy'],
+  ['footer.principal [data-abrir-cookies]', 'Cookie settings'],
+  ['footer.principal [data-ir="profesor"]', 'Instructor access'],
+];
+const textosOriginales = new Map();
+
+function aplicarIdioma(idioma) {
+  document.documentElement.lang = idioma;
+  TEXTOS_EN.forEach(([selector, en]) => {
+    if (en === null) return;
+    $$(selector).forEach((el) => {
+      if (!textosOriginales.has(el)) textosOriginales.set(el, el.innerHTML);
+      el.innerHTML = idioma === 'en' ? en : textosOriginales.get(el);
+    });
+  });
+}
+
 const MENSAJE_ESPERA_EXPERTO =
   'El experto se está preparando. Le cuesta un poco solo al principio; después responde con normalidad.';
+const MENSAJE_ESPERA_EXPERTO_EN =
+  'The expert is getting ready. It takes a moment only at the start; after that it answers normally.';
 
 function leerAccesoGuardado() {
   try { return JSON.parse(localStorage.getItem(CLAVE_ACCESO)) || null; } catch { return null; }
@@ -273,6 +325,7 @@ async function entrarConCodigo(codigo, { intento = 1, desdeFormulario = false, v
     estado.filtro = 'todos';
     aplicarEmpresa(datos.empresa);
     document.body.classList.toggle('modo-experto', esModoExperto());
+    aplicarIdioma(idiomaWeb());
     pintarFiltros();
     pintarCasos();
     pintarMarco();
@@ -367,8 +420,8 @@ function pintarGrupoActivo() {
   const caja = $('#grupo-activo');
   if (!caja) return;
   if (!estado.acceso) { caja.innerHTML = ''; return; }
-  caja.innerHTML = `Grupo: <strong>${escapar(estado.acceso.nombreGrupo)}</strong> (${escapar(estado.acceso.codigo)}) ·
-    <button type="button" data-salir-grupo>Cambiar de grupo</button>`;
+  caja.innerHTML = `${tx('Grupo', 'Group')}: <strong>${escapar(estado.acceso.nombreGrupo)}</strong> (${escapar(estado.acceso.codigo)}) ·
+    <button type="button" data-salir-grupo>${tx('Cambiar de grupo', 'Change group')}</button>`;
 }
 
 function salirDelGrupo() {
@@ -397,6 +450,7 @@ function salirDelGrupo() {
   marcaPdf = '';
   document.body.classList.add('sin-acceso');
   document.body.classList.remove('modo-experto');
+  aplicarIdioma('es');
   pintarGrupoActivo();
   ir('acceso');
 }
@@ -482,13 +536,13 @@ function tarjetaExperto(c) {
   const experto = c.contraparte || { nombre: '', descripcion: '' };
   return `
     <article class="tarjeta">
-      <div class="meta"><span class="pastilla">Experto</span><span class="pastilla">Consulta abierta</span></div>
+      <div class="meta"><span class="pastilla">${tx('Experto', 'Expert')}</span><span class="pastilla">${tx('Consulta abierta', 'Open conversation')}</span></div>
       <h3>${escapar(c.titulo)}</h3>
       <p class="sub">${escapar(c.subtitulo || '')}</p>
       <p class="resumen">${escapar(c.resumen)}</p>
-      <div class="vars"><strong>Con:</strong> ${escapar(experto.nombre)}<br><small>${escapar(experto.descripcion || '')}</small></div>
-      <div class="vars"><strong>Temas:</strong> ${c.variables.map(escapar).join(' · ')}</div>
-      <button class="boton" data-experto="${c.id}">Empezar la conversación</button>
+      <div class="vars"><strong>${tx('Con', 'With')}:</strong> ${escapar(experto.nombre)}<br><small>${escapar(experto.descripcion || '')}</small></div>
+      <div class="vars"><strong>${tx('Temas', 'Topics')}:</strong> ${c.variables.map(escapar).join(' · ')}</div>
+      <button class="boton" data-experto="${c.id}">${tx('Empezar la conversación', 'Start the conversation')}</button>
     </article>`;
 }
 
@@ -517,7 +571,7 @@ async function iniciarExperto(casoId) {
     estado.config = { ...caso.configFija };
     entrarEnLaSala();
   } catch (err) {
-    alert('No se ha podido abrir la conversación: ' + (err.message || err));
+    alert(tx('No se ha podido abrir la conversación: ', 'Could not open the conversation: ') + (err.message || err));
   } finally {
     botones.forEach((b) => { b.disabled = false; });
   }
@@ -708,11 +762,11 @@ function avatarCerradoPorAnam(cliente) {
   estado.avatar.cliente = null;
   if (!sigueEnLaSala() || estado.terminada) { ocultarAvatar(); return; }
   if (estado.avatar.reconexiones >= MAX_RECONEXIONES_AVATAR) {
-    mostrarEstadoAvatar('El avatar se ha desconectado. La negociación sigue por texto.');
+    mostrarEstadoAvatar(tx('El avatar se ha desconectado. La negociación sigue por texto.', 'The avatar has disconnected. The conversation continues in text.'));
     return;
   }
   estado.avatar.reconexiones += 1;
-  mostrarEstadoAvatar('Reconectando el avatar…');
+  mostrarEstadoAvatar(tx('Reconectando el avatar…', 'Reconnecting the avatar…'));
   setTimeout(() => {
     if (sigueEnLaSala() && !estado.terminada && !estado.avatar.cliente) iniciarAvatar();
   }, 1500);
@@ -722,7 +776,7 @@ async function iniciarAvatar() {
   await pararAvatar();
   if (!estado.caso || !estado.rolId) return;
 
-  mostrarEstadoAvatar('Conectando el avatar…');
+  mostrarEstadoAvatar(tx('Conectando el avatar…', 'Connecting the avatar…'));
   const nombre = $('#avatar-nombre');
   if (nombre) nombre.textContent = estado.briefing ? estado.briefing.contraparte.nombre : '—';
 
@@ -823,12 +877,12 @@ function entrarEnLaSala() {
   $('#btn-tiempo-muerto').classList.toggle('oculto', estado.config.modo !== 'coach');
   // Experto: la mesa se describe como una consulta, no como una negociación.
   $('#sala-dureza-fila').classList.toggle('oculto', experto);
-  $('#sala-etq-otro').textContent = experto ? 'Experto' : 'Al otro lado';
-  $('#sala-etq-turnos').textContent = experto ? 'Preguntas' : 'Intervenciones';
-  $('#sala-titulo-mesa').textContent = experto ? 'La conversación' : 'La mesa';
-  $('#sala-titulo-briefing').textContent = experto ? 'Cómo sacarle partido' : 'Tu briefing';
+  $('#sala-etq-otro').textContent = experto ? tx('Experto', 'Expert') : 'Al otro lado';
+  $('#sala-etq-turnos').textContent = experto ? tx('Preguntas', 'Questions') : 'Intervenciones';
+  $('#sala-titulo-mesa').textContent = experto ? tx('La conversación', 'The conversation') : 'La mesa';
+  $('#sala-titulo-briefing').textContent = experto ? tx('Cómo sacarle partido', 'Getting the most out of it') : 'Tu briefing';
   $('#entrada').placeholder = experto
-    ? 'Escribe tu pregunta… (Enter para enviar, Mayús+Enter para salto de línea)'
+    ? tx('Escribe tu pregunta… (Enter para enviar, Mayús+Enter para salto de línea)', 'Type your question… (Enter to send, Shift+Enter for a new line)')
     : 'Escribe tu intervención… (Enter para enviar, Mayús+Enter para salto de línea)';
   ir('sala');
   iniciarAvatar();
@@ -881,6 +935,8 @@ function ultimoCorteDeFrase(t) {
    quitan las marcas de formato que no deben leerse. Solo afecta a lo que
    dice el avatar; en pantalla el texto sigue igual. */
 function textoParaVoz(t) {
+  // En inglés solo se quitan las marcas de formato: la voz ya lee bien los símbolos.
+  if (idiomaWeb() === 'en') return String(t || '').replace(/[*_#`«»"“”]/g, '').replace(/[ \t]{2,}/g, ' ');
   return String(t || '')
     .replace(/[*_#`«»"“”]/g, '')
     .replace(/(\d)\s*M€/g, '$1 millones de euros')
@@ -920,7 +976,7 @@ async function hablarConSimulacion() {
     if (!acumulado) {
       caja.innerHTML =
         '<span class="escribiendo"><i></i><i></i><i></i></span>' +
-        `<div style="color:var(--tenue);font-size:.85rem;margin-top:8px">${estado.caso && estado.caso.experto ? MENSAJE_ESPERA_EXPERTO : MENSAJE_ESPERA}</div>`;
+        `<div style="color:var(--tenue);font-size:.85rem;margin-top:8px">${estado.caso && estado.caso.experto ? tx(MENSAJE_ESPERA_EXPERTO, MENSAJE_ESPERA_EXPERTO_EN) : MENSAJE_ESPERA}</div>`;
     }
   }, 7000);
   try {
@@ -940,7 +996,7 @@ async function hablarConSimulacion() {
     clearTimeout(avisoLento);
 
     if (!r.ok) {
-      let mensaje = 'No se ha podido contactar con la simulación.';
+      let mensaje = tx('No se ha podido contactar con la simulación.', 'Could not reach the expert.');
       try { mensaje = (await r.json()).error || mensaje; } catch {}
       caja.innerHTML = `<span style="color:var(--rojo)">${escapar(mensaje)}</span>`;
       return;
@@ -1057,7 +1113,7 @@ async function hablarConSimulacion() {
     }
 
     if (!acumulado) {
-      caja.innerHTML = '<span style="color:var(--rojo)">La simulación no ha respondido. Reintenta.</span>';
+      caja.innerHTML = `<span style="color:var(--rojo)">${tx('La simulación no ha respondido. Reintenta.', 'No answer came back. Please try again.')}</span>`;
       return;
     }
 
@@ -1111,7 +1167,7 @@ async function hablarConSimulacion() {
       turno('sistema', 'Simulación cerrada. Puedes repetir el caso con otra configuración desde la biblioteca.', '');
     }
   } catch (err) {
-    caja.innerHTML = `<span style="color:var(--rojo)">Error de conexión: ${escapar(String(err.message || err))}</span>`;
+    caja.innerHTML = `<span style="color:var(--rojo)">${tx('Error de conexión', 'Connection error')}: ${escapar(String(err.message || err))}</span>`;
   } finally {
     clearTimeout(avisoLento);
     estado.ocupado = false;
@@ -1129,7 +1185,7 @@ function enviar(texto) {
     return;
   }
   estado.mensajes.push({ role: 'user', content: t });
-  turno('mio', t, 'Tú');
+  turno('mio', t, tx('Tú', 'You'));
   $('#entrada').value = '';
   hablarConSimulacion();
 }
@@ -1183,7 +1239,7 @@ function inicializarDictado() {
     btn.classList.remove('grabando');
     btn.setAttribute('aria-pressed', 'false');
     btn.textContent = '🎤';
-    btn.title = 'Dictar por voz';
+    btn.title = tx('Dictar por voz', 'Dictate');
   };
 
   const marcarEscuchando = () => {
@@ -1191,7 +1247,7 @@ function inicializarDictado() {
     btn.classList.add('grabando');
     btn.setAttribute('aria-pressed', 'true');
     btn.textContent = '⏹';
-    btn.title = 'Detener el dictado';
+    btn.title = tx('Detener el dictado', 'Stop dictation');
   };
 
   btn.addEventListener('click', () => {
@@ -1202,7 +1258,7 @@ function inicializarDictado() {
     if (estado.ocupado) return;
 
     reconocimiento = new MotorDictado();
-    reconocimiento.lang = 'es-ES';
+    reconocimiento.lang = idiomaWeb() === 'en' ? 'en-US' : 'es-ES';
     reconocimiento.interimResults = false;
     reconocimiento.maxAlternatives = 1;
 
@@ -1225,7 +1281,7 @@ function inicializarDictado() {
       console.error('Dictado por voz:', e.error);
       marcarReposo();
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        alert('No se ha podido acceder al micrófono. Revisa los permisos del navegador para este sitio.');
+        alert(tx('No se ha podido acceder al micrófono. Revisa los permisos del navegador para este sitio.', 'Could not access the microphone. Check this site\'s browser permissions.'));
       } else if (e.error === 'no-speech') {
         // Nada que avisar: el participante simplemente no ha dicho nada.
       }
