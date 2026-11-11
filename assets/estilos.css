@@ -484,3 +484,10 @@ header.principal nav.principal { margin-left: auto; }
 @media (max-width: 640px) {
   .marca img.logo { height: 28px; }
 }
+
+/* ── Empresas de tipo experto (p. ej. Built to Innovate) ──
+   app.js pone body.modo-experto cuando todos los casos del grupo son de
+   consulta a un experto: se ocultan la preparación, la evaluación y el
+   marco de negociación, y aparecen los bloques propios del experto. */
+body:not(.modo-experto) .solo-experto { display: none !important; }
+body.modo-experto .solo-negociacion { display: none !important; }

@@ -226,6 +226,17 @@ const CLAVE_ACCESO = 'negociador-acceso-v1';
 const MENSAJE_ESPERA =
   'El negociador se está preparando. Se está leyendo y preparando la negociación; le cuesta un poco, pero solo al principio: después es implacable y no necesita tiempo extra.';
 
+/* Empresas cuyos casos son de consulta a un experto (p. ej. «Built to
+   Innovate»): no hay negociación, así que la web oculta el briefing, la hoja
+   de preparación, la evaluación y los resultados, y lleva directamente a la
+   conversación (ver casos-bensaou.js en el servidor). */
+function esModoExperto() {
+  return estado.casos.length > 0 && estado.casos.every((c) => c.experto);
+}
+
+const MENSAJE_ESPERA_EXPERTO =
+  'El experto se está preparando. Le cuesta un poco solo al principio; después responde con normalidad.';
+
 function leerAccesoGuardado() {
   try { return JSON.parse(localStorage.getItem(CLAVE_ACCESO)) || null; } catch { return null; }
 }
@@ -261,6 +272,7 @@ async function entrarConCodigo(codigo, { intento = 1, desdeFormulario = false, v
     estado.casos = datos.casos || [];
     estado.filtro = 'todos';
     aplicarEmpresa(datos.empresa);
+    document.body.classList.toggle('modo-experto', esModoExperto());
     pintarFiltros();
     pintarCasos();
     pintarMarco();
@@ -360,7 +372,7 @@ function pintarGrupoActivo() {
 }
 
 function salirDelGrupo() {
-  if (estado.mensajes.length && !estado.terminada &&
+  if (estado.mensajes.length && !estado.terminada && !esModoExperto() &&
       !confirm('Tienes una negociación sin terminar. Si cambias de grupo se perderá. ¿Continuar?')) return;
   pararAvatar();
   try { localStorage.removeItem(CLAVE_ACCESO); } catch {}
@@ -384,6 +396,7 @@ function salirDelGrupo() {
   logoPdf = null;
   marcaPdf = '';
   document.body.classList.add('sin-acceso');
+  document.body.classList.remove('modo-experto');
   pintarGrupoActivo();
   ir('acceso');
 }
@@ -440,8 +453,7 @@ function pintarFiltros() {
 function pintarCasos() {
   const visibles = estado.casos.filter((c) => estado.filtro === 'todos' || c.tipo === estado.filtro);
   $('#lista-casos').innerHTML = visibles
-    .map(
-      (c) => `
+    .map((c) => c.experto ? tarjetaExperto(c) : `
     <article class="tarjeta">
       <div class="meta">
         <span class="pastilla ${c.tipo}">${c.tipo}</span>
@@ -461,7 +473,59 @@ function pintarCasos() {
   $$('#lista-casos [data-caso]').forEach((b) =>
     b.addEventListener('click', () => abrirConfigurador(b.dataset.caso))
   );
+  $$('#lista-casos [data-experto]').forEach((b) =>
+    b.addEventListener('click', () => iniciarExperto(b.dataset.experto))
+  );
 }
+
+function tarjetaExperto(c) {
+  const experto = c.contraparte || { nombre: '', descripcion: '' };
+  return `
+    <article class="tarjeta">
+      <div class="meta"><span class="pastilla">Experto</span><span class="pastilla">Consulta abierta</span></div>
+      <h3>${escapar(c.titulo)}</h3>
+      <p class="sub">${escapar(c.subtitulo || '')}</p>
+      <p class="resumen">${escapar(c.resumen)}</p>
+      <div class="vars"><strong>Con:</strong> ${escapar(experto.nombre)}<br><small>${escapar(experto.descripcion || '')}</small></div>
+      <div class="vars"><strong>Temas:</strong> ${c.variables.map(escapar).join(' · ')}</div>
+      <button class="boton" data-experto="${c.id}">Empezar la conversación</button>
+    </article>`;
+}
+
+/* Experto: sin configurador ni briefing. Se carga la guía de uso (el
+   "briefing" del participante) y se entra directamente en la sala. Si ya
+   había una conversación abierta con este experto, se retoma. */
+async function iniciarExperto(casoId) {
+  const caso = casoId ? estado.casos.find((c) => c.id === casoId) : estado.casos.find((c) => c.experto);
+  if (!caso) return;
+  if (estado.ocupado) return;
+  const botones = $$('[data-experto], [data-empezar-experto]');
+  botones.forEach((b) => { b.disabled = true; });
+  try {
+    if (!estado.briefing || estado.briefing.casoId !== caso.id) {
+      const r = await fetch(`${API}/api/briefing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grupo: estado.acceso.codigo, casoId: caso.id, rolId: caso.roles[0].id }),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error || 'error');
+      estado.briefing = datos;
+    }
+    estado.caso = caso;
+    estado.rolId = caso.roles[0].id;
+    estado.config = { ...caso.configFija };
+    entrarEnLaSala();
+  } catch (err) {
+    alert('No se ha podido abrir la conversación: ' + (err.message || err));
+  } finally {
+    botones.forEach((b) => { b.disabled = false; });
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-empezar-experto]')) { e.preventDefault(); iniciarExperto(); }
+});
 
 /* ─────────── Configurador ─────────── */
 
@@ -718,7 +782,8 @@ function entrarEnLaSala() {
   // salir de la sala). Si el caso o el rol han cambiado desde la última vez
   // -aunque queden mensajes sin cerrar-, es una negociación nueva: no hay
   // que arrastrar el papel ni la conversación de la anterior.
-  const compite = compiteEstaNegociacion();
+  const experto = Boolean(estado.caso.experto);
+  const compite = !experto && compiteEstaNegociacion();
   const esLaMismaSesion =
     estado.mensajes.length &&
     !estado.terminada &&
@@ -756,6 +821,15 @@ function entrarEnLaSala() {
   $('#sala-turnos').textContent = '0';
   $('#sala-recordatorio').innerHTML = md(estado.briefing.rol.briefing);
   $('#btn-tiempo-muerto').classList.toggle('oculto', estado.config.modo !== 'coach');
+  // Experto: la mesa se describe como una consulta, no como una negociación.
+  $('#sala-dureza-fila').classList.toggle('oculto', experto);
+  $('#sala-etq-otro').textContent = experto ? 'Experto' : 'Al otro lado';
+  $('#sala-etq-turnos').textContent = experto ? 'Preguntas' : 'Intervenciones';
+  $('#sala-titulo-mesa').textContent = experto ? 'La conversación' : 'La mesa';
+  $('#sala-titulo-briefing').textContent = experto ? 'Cómo sacarle partido' : 'Tu briefing';
+  $('#entrada').placeholder = experto
+    ? 'Escribe tu pregunta… (Enter para enviar, Mayús+Enter para salto de línea)'
+    : 'Escribe tu intervención… (Enter para enviar, Mayús+Enter para salto de línea)';
   ir('sala');
   iniciarAvatar();
   hablarConSimulacion();
@@ -765,6 +839,8 @@ $('#btn-a-la-sala').addEventListener('click', entrarEnLaSala);
 $('#btn-prep-a-la-sala').addEventListener('click', entrarEnLaSala);
 
 $('#btn-salir').addEventListener('click', () => {
+  // Con el experto no se pierde nada: al volver, la conversación se retoma.
+  if (estado.caso && estado.caso.experto) { pararAvatar(); ir('inicio'); return; }
   if (estado.mensajes.length && !estado.terminada) {
     if (!confirm('Vas a salir de la negociación en curso. ¿Seguro?')) return;
   }
@@ -844,7 +920,7 @@ async function hablarConSimulacion() {
     if (!acumulado) {
       caja.innerHTML =
         '<span class="escribiendo"><i></i><i></i><i></i></span>' +
-        `<div style="color:var(--tenue);font-size:.85rem;margin-top:8px">${MENSAJE_ESPERA}</div>`;
+        `<div style="color:var(--tenue);font-size:.85rem;margin-top:8px">${estado.caso && estado.caso.experto ? MENSAJE_ESPERA_EXPERTO : MENSAJE_ESPERA}</div>`;
     }
   }, 7000);
   try {
