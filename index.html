@@ -25,10 +25,12 @@
     </div>
     <nav class="principal">
       <button data-ir="inicio">Inicio</button>
-      <button data-ir="casos">El caso</button>
-      <button data-ir="preparacion">Preparación</button>
-      <button data-ir="competicion" id="nav-competicion">Resultados</button>
-      <button data-ir="marco">El marco</button>
+      <button data-ir="casos"><span class="solo-negociacion">El caso</span><span class="solo-experto">El experto</span></button>
+      <!-- Con una empresa de tipo experto (Built to Innovate) no hay preparación,
+           evaluación ni marco de negociación: estos botones se ocultan. -->
+      <button data-ir="preparacion" class="solo-negociacion">Preparación</button>
+      <button data-ir="competicion" id="nav-competicion" class="solo-negociacion">Resultados</button>
+      <button data-ir="marco" class="solo-negociacion">El marco</button>
     </nav>
     <!-- Cierra la sesión del grupo y vuelve a la portada del código.
          Fuera del menú para que en móvil se vea siempre, junto al logo. -->
@@ -69,13 +71,45 @@
       <span class="etiqueta" data-texto="etiqueta"></span>
       <h1 data-texto="heroTitulo"></h1>
       <p class="entrada" data-texto="heroTexto"></p>
-      <div class="barra-accion">
+      <div class="barra-accion solo-negociacion">
         <button class="boton" data-ir="casos">Ver el caso</button>
         <button class="boton secundario" data-ir="marco">Cómo se te evalúa</button>
       </div>
+      <div class="barra-accion solo-experto">
+        <button class="boton" data-empezar-experto>Empezar la conversación</button>
+        <button class="boton secundario" data-ir="casos">Qué puedes preguntar</button>
+      </div>
     </div>
 
-    <div class="pasos">
+    <!-- ── Empresa de tipo experto ── -->
+    <div class="pasos solo-experto">
+      <div class="paso">
+        <div class="num">1</div>
+        <h3>Pregunta</h3>
+        <p data-texto="paso1"></p>
+      </div>
+      <div class="paso">
+        <div class="num">2</div>
+        <h3>Profundiza</h3>
+        <p>Pide ejemplos, repregunta y cuéntale tu caso: tu empresa, tu equipo, tu sector.</p>
+      </div>
+      <div class="paso">
+        <div class="num">3</div>
+        <h3>Escucha</h3>
+        <p data-texto="paso3"></p>
+      </div>
+    </div>
+    <div class="bloque solo-experto">
+      <h3>Sobre este experto</h3>
+      <p class="ayuda" style="margin-bottom:0">
+        Es un avatar de inteligencia artificial que responde con el marco de <em>Built to Innovate</em>
+        (Ben M. Bensaou, McGraw Hill). No hay caso, ni nota, ni ranking: es un espacio para tus preguntas.
+        Como cualquier IA, puede equivocarse; contrasta lo importante con el libro.
+      </p>
+    </div>
+
+    <!-- ── Empresa de negociación ── -->
+    <div class="pasos solo-negociacion">
       <div class="paso">
         <div class="num">1</div>
         <h3>Lee tu briefing</h3>
@@ -98,7 +132,7 @@
       </div>
     </div>
 
-    <div class="bloque">
+    <div class="bloque solo-negociacion">
       <h3>Por qué una simulación</h3>
       <p class="ayuda" style="margin-bottom:0">
         Porque el cliente simulado no se corta, no te va a dejar ganar por cortesía y solo te dará
@@ -112,8 +146,11 @@
 <!-- ══════════ CASOS ══════════ -->
 <section id="vista-casos" class="vista">
   <div class="contenedor">
-    <h2>El caso</h2>
-    <p class="ayuda" style="color:var(--tenue);max-width:62ch">
+    <h2><span class="solo-negociacion">El caso</span><span class="solo-experto">El experto</span></h2>
+    <p class="ayuda solo-experto" style="color:var(--tenue);max-width:62ch">
+      Una conversación abierta: pregunta lo que quieras sobre innovar en tu organización.
+    </p>
+    <p class="ayuda solo-negociacion" style="color:var(--tenue);max-width:62ch">
       Todos los participantes juegan el mismo papel, contra el mismo interlocutor y al mismo nivel.
       Tú ves solo tu información; el cliente tiene sus propios objetivos y límites confidenciales.
     </p>
@@ -228,17 +265,17 @@
     <div class="sala">
       <aside class="panel-lateral">
         <div class="bloque">
-          <h3>La mesa</h3>
+          <h3 id="sala-titulo-mesa">La mesa</h3>
           <div class="dato"><span>Caso</span><span id="sala-caso">—</span></div>
           <div class="dato"><span>Tú</span><span id="sala-yo">—</span></div>
-          <div class="dato"><span>Al otro lado</span><span id="sala-simulacion">—</span></div>
-          <div class="dato"><span>Nivel</span><span id="sala-dureza">—</span></div>
+          <div class="dato"><span id="sala-etq-otro">Al otro lado</span><span id="sala-simulacion">—</span></div>
+          <div class="dato" id="sala-dureza-fila"><span>Nivel</span><span id="sala-dureza">—</span></div>
           <div class="dato oculto" id="sala-color-fila"><span>Perfil</span><span id="sala-color">—</span></div>
-          <div class="dato"><span>Intervenciones</span><span id="sala-turnos">0</span></div>
+          <div class="dato"><span id="sala-etq-turnos">Intervenciones</span><span id="sala-turnos">0</span></div>
           <div class="dato oculto" id="sala-competicion-fila"><span>Competición</span><span id="sala-competicion">—</span></div>
         </div>
         <div class="bloque">
-          <h3>Tu briefing</h3>
+          <h3 id="sala-titulo-briefing">Tu briefing</h3>
           <div class="prosa" id="sala-recordatorio" style="font-size:.85rem"></div>
         </div>
         <button class="boton fantasma" id="btn-salir" style="width:100%">Salir de la sala</button>
@@ -260,7 +297,7 @@
             <button class="boton fantasma oculto" id="btn-microfono" type="button" aria-pressed="false" title="Dictar por voz">🎤</button>
             <button class="boton" id="btn-enviar">Enviar</button>
           </div>
-          <div class="acciones-sala">
+          <div class="acciones-sala solo-negociacion">
             <button class="boton fantasma" data-atajo="receso">Pedir un receso</button>
             <button class="boton fantasma" data-atajo="tiempo muerto" id="btn-tiempo-muerto">Tiempo muerto</button>
             <button class="boton peligro" data-atajo="FIN DE LA SIMULACIÓN">Fin de la simulación</button>
@@ -708,9 +745,10 @@
 <footer class="principal">
   <div class="contenedor">
     <div>
-      <div>NegoLab<span data-empresa-pie></span> — simulador de negociación</div>
+      <div>NegoLab<span data-empresa-pie></span> — <span class="solo-negociacion">simulador de negociación</span><span class="solo-experto">conversación con un experto</span></div>
       <div class="grupo-activo solo-con-acceso" id="grupo-activo"></div>
-      <div>Los programas, cifras y personajes del caso son ficticios. La contraparte es una inteligencia artificial.</div>
+      <div class="solo-negociacion">Los programas, cifras y personajes del caso son ficticios. La contraparte es una inteligencia artificial.</div>
+      <div class="solo-experto">El experto es un avatar de inteligencia artificial y puede equivocarse.</div>
     </div>
     <nav class="pie-enlaces" aria-label="Información legal">
       <a href="#aviso-legal" data-ir="aviso-legal">Aviso legal</a>
